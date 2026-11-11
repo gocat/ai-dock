@@ -277,6 +277,31 @@ final class RefreshGlyphButton: NSButton {
         toolTip = description; setAccessibilityLabel(description)
         guard next != phase else { return }
         let reduce = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        // Rotate the same SF Symbol used at rest, around the fixed button center.
+        // Never substitute the hand-drawn morph path while spinning.
+        let rotation = layer?.presentation()?.transform ?? CATransform3DIdentity
+        layer?.removeAnimation(forKey:"symbolRotation")
+        if next == .running {
+            image = NSImage(systemSymbolName:"arrow.clockwise",accessibilityDescription:nil)?.withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize:14,weight:.regular))
+            ink.isHidden = true
+            if !reduce {
+                let spin = CABasicAnimation(keyPath:"transform.rotation.z")
+                spin.fromValue = 0; spin.toValue = 2 * Double.pi
+                spin.duration = 1.1; spin.repeatCount = .infinity
+                spin.timingFunction = CAMediaTimingFunction(name:.linear)
+                layer?.add(spin,forKey:"symbolRotation")
+            }
+            phase = next
+            return
+        }
+        if !reduce && phase == .running {
+            let settle = CABasicAnimation(keyPath:"transform")
+            settle.fromValue = NSValue(caTransform3D:rotation)
+            settle.toValue = NSValue(caTransform3D:CATransform3DIdentity)
+            settle.duration = 0.35
+            settle.timingFunction = CAMediaTimingFunction(controlPoints:0.16,1,0.3,1)
+            layer?.add(settle,forKey:"symbolSettle")
+        }
         let oldPath = stroke.presentation()?.path ?? stroke.path
         let oldTransform = ink.presentation()?.transform ?? ink.transform
         ink.removeAnimation(forKey:"rotation")
@@ -297,12 +322,6 @@ final class RefreshGlyphButton: NSButton {
             let fade = CABasicAnimation(keyPath:"opacity")
             fade.fromValue = head.presentation()?.opacity ?? (phase == .success ? 0 : 1)
             fade.toValue = head.opacity; fade.duration = 0.25; head.add(fade,forKey:"fade")
-            if next == .running {
-                let rotate = CABasicAnimation(keyPath:"transform.rotation.z")
-                rotate.fromValue = 0; rotate.toValue = 2 * Double.pi
-                rotate.duration = 0.95; rotate.repeatCount = .infinity
-                ink.add(rotate,forKey:"rotation")
-            }
         }
         // Partial failure never morphs to a success checkmark.
         if next == .failure { image = NSImage(systemSymbolName:"exclamationmark.circle",accessibilityDescription:nil); ink.isHidden = true }
@@ -598,7 +617,7 @@ if CommandLine.arguments.contains("--self-test") {
     let settings = fixture.settingsView()
     precondition(settings.subviews.allSatisfy { settings.bounds.contains($0.frame) })
     fixture.refreshGlyph.update(.running)
-    precondition(!fixture.refreshGlyph.isEnabled)
+    precondition(!fixture.refreshGlyph.isEnabled && fixture.refreshGlyph.image != nil)
     fixture.refreshGlyph.update(.success)
     precondition(fixture.refreshGlyph.isEnabled && fixture.refreshGlyph.toolTip == "刷新完成")
     fixture.refreshGlyph.update(.failure)
