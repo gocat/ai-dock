@@ -3,6 +3,7 @@ import zipfile,hashlib,json
 root=Path(__file__).resolve().parent.parent
 files=['.gitignore','README.md','PRODUCT.md','THIRD_PARTY.md','RELEASE_REVIEW.md','RELEASE_NOTES.md','VALIDATION.md','build.sh',
        'Sources/main.swift','Resources/GenerateIcon.swift','scripts/generate-icon.sh','scripts/review-package.sh','scripts/source-package.py']
+files += ['PERFORMANCE.md'] + [str(p.relative_to(root)) for p in sorted((root/'docs/images').glob('*.png'))]
 if (root/'LICENSE').is_file():files.append('LICENSE')
 records=[]
 with zipfile.ZipFile(root/'dist/AI-Dock-source-review.zip','w',zipfile.ZIP_DEFLATED) as archive:

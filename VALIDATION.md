@@ -21,3 +21,6 @@ Pending:
 - Owner acceptance of neutral icons, repository owner/name, license/copyright attribution, release version and distribution format.
 
 Do not describe the candidate as publicly released or fully cross-platform tested.
+
+- Refresh follow-up: corrected checkmark orientation for AppKit layer coordinates, shifted glyph optical center and added cubic easing (0.55-second morph / 0.40-second settle). Native success-state render verified; subjective live motion remains for owner review.
+- README images use synthetic values rendered from actual native view code; no live account screenshots uploaded. Energy review is in PERFORMANCE.md; only one process snapshot measured.

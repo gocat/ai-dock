@@ -231,7 +231,7 @@ final class RefreshGlyphButton: NSButton {
             let t = CGFloat(i) / 48
             let point: CGPoint
             if check {
-                let a = CGPoint(x: 8, y: 16), b = CGPoint(x: 14, y: 10), c = CGPoint(x: 24, y: 23)
+                let a = CGPoint(x: 8, y: 16), b = CGPoint(x: 14, y: 22), c = CGPoint(x: 24, y: 9)
                 if t < 0.38 { let u = t / 0.38; point = CGPoint(x: a.x + (b.x-a.x)*u, y: a.y + (b.y-a.y)*u) }
                 else { let u = (t-0.38)/0.62; point = CGPoint(x: b.x+(c.x-b.x)*u, y:b.y+(c.y-b.y)*u) }
             } else {
@@ -245,7 +245,7 @@ final class RefreshGlyphButton: NSButton {
     override init(frame frameRect: NSRect) {
         super.init(frame:frameRect)
         title = ""; isBordered = false; wantsLayer = true
-        ink.bounds = CGRect(x:0,y:0,width:32,height:32); ink.position = CGPoint(x:16,y:16)
+        ink.bounds = CGRect(x:0,y:0,width:32,height:32); ink.position = CGPoint(x:16,y:17)
         ink.isGeometryFlipped = false
         layer?.addSublayer(ink)
         for line in [stroke,head] {
@@ -283,12 +283,12 @@ final class RefreshGlyphButton: NSButton {
         CATransaction.commit()
         if !reduce {
             let morph = CABasicAnimation(keyPath:"path")
-            morph.fromValue = oldPath; morph.toValue = stroke.path; morph.duration = 0.42
-            morph.timingFunction = CAMediaTimingFunction(name:.easeInEaseOut)
+            morph.fromValue = oldPath; morph.toValue = stroke.path; morph.duration = 0.55
+            morph.timingFunction = CAMediaTimingFunction(controlPoints:0.22,0.80,0.25,1)
             stroke.add(morph,forKey:"morph")
             let settle = CABasicAnimation(keyPath:"transform")
             settle.fromValue = NSValue(caTransform3D:oldTransform); settle.toValue = NSValue(caTransform3D:CATransform3DIdentity)
-            settle.duration = 0.32; settle.timingFunction = CAMediaTimingFunction(name:.easeOut)
+            settle.duration = 0.40; settle.timingFunction = CAMediaTimingFunction(controlPoints:0.16,1,0.30,1)
             if next != .running { ink.add(settle,forKey:"settle") }
             let fade = CABasicAnimation(keyPath:"opacity")
             fade.fromValue = head.presentation()?.opacity ?? (phase == .success ? 0 : 1)
