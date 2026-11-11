@@ -52,3 +52,9 @@ Source license: MIT, Copyright (c) 2026 gocat. Source publication is authorized;
 - Added System / Simplified Chinese / English selection in Settings, with immediate updates and persistence.
 - Localized status, countdowns, accessibility descriptions, settings and alerts; retained fixed popover dimensions.
 - Added an English README and reduced the main README to the selected dark showcase only.
+
+## Source installation
+
+- Added a no-sudo source installer: environment checks, local build/self-test, user Applications installation, update backup and launch.
+- Added copy-to-AI and one-line terminal installation at the top of both READMEs, with candid prerequisites and the reason for not offering a DMG yet.
+- English README now uses an English localization of the selected dark v5 showcase.

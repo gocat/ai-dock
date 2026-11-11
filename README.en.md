@@ -4,7 +4,29 @@
 
 A native macOS menu bar utility for **Codex weekly quota, independent ChatGPT / Google connectivity checks, quick launchers, and quiet failure reminders**.
 
-![AI Dock showcase](docs/images/showcase-dark.jpg)
+## Quick install
+
+### Ask your AI assistant
+
+Copy this prompt to an AI assistant that can use a terminal on your Mac. A chat-only assistant can instead walk you through the commands:
+
+> Help me install AI Dock on this Mac: https://github.com/gocat/ai-dock. Read README.en.md and install.sh first. Check macOS, Apple Command Line Tools, and the quota-reading dependency, then build from source, run self-tests, install, and open the app. Do not change my network settings, accounts, or credentials. If system tools or terminal access are missing, explain the required steps first.
+
+### Or paste into Terminal
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/gocat/ai-dock/main/install.sh | bash
+```
+
+The script downloads source from this repository, builds and tests it locally, then installs and opens the app. First installs go to `~/Applications/AI Dock.app`; rerunning updates an existing installation while retaining preferences and a backup of the old app. Quit AI Dock before updating. No `sudo` or paid developer membership is needed. You can [inspect the script](install.sh) first.
+
+**Requires macOS 14+, Apple Command Line Tools, and Python 3.** If the compiler tools are missing, run `xcode-select --install`, finish Apple's installer, and rerun the command. The initial tool download can be large; build time depends on your Mac and network. Tested on Apple silicon; Intel is not device-tested.
+
+Quota reads currently use the Codex CLI inside `/Applications/ChatGPT.app` and its existing login. A web account or a separately installed Codex CLI alone does not guarantee compatibility with this fixed path. Without it, quota is unavailable but network checks still work. The installer never requests credentials or changes proxy settings. The Clash launcher currently expects Clash Verge.
+
+**Why no DMG yet?** Honestly, I don't want to pay Apple's developer membership fee for this little utility right now. Making a DMG is free; developer signing and notarization are what make distribution smoother. For now, asking your AI assistant or pasting one command to build locally is convenient enough. A chat-only AI cannot install it for you, but can guide you.
+
+![AI Dock showcase](docs/images/showcase-dark-en.jpg)
 
 Supports light and dark appearances. This AI-assisted showcase uses sample data and includes redrawn visual details. Application brand marks identify the launch targets; the default source build uses neutral system symbols. The showcase predates the language selector.
 
