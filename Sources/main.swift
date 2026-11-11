@@ -222,139 +222,110 @@ func probeLabel(_ name: String, checked: Bool, latency: Int?, threshold: Int) ->
 final class RefreshGlyphButton: NSButton {
     enum Phase { case idle, running, success, failure }
     private let ink = CALayer()
-    private let symbol = CALayer()
     private let stroke = CAShapeLayer()
     private let head = CAShapeLayer()
     private var phase: Phase = .idle
+    static let radius: CGFloat = 6.8
     static func path(check: Bool) -> CGPath {
         let p = CGMutablePath()
         for i in 0...48 {
-            let t = CGFloat(i) / 48
+            let t = CGFloat(i)/48
             let point: CGPoint
             if check {
-                let a = CGPoint(x: 8, y: 16), b = CGPoint(x: 14, y: 22), c = CGPoint(x: 24, y: 9)
-                if t < 0.38 { let u = t / 0.38; point = CGPoint(x: a.x + (b.x-a.x)*u, y: a.y + (b.y-a.y)*u) }
-                else { let u = (t-0.38)/0.62; point = CGPoint(x: b.x+(c.x-b.x)*u, y:b.y+(c.y-b.y)*u) }
+                let a=CGPoint(x:9.5,y:16), b=CGPoint(x:14,y:20.5), c=CGPoint(x:23,y:10.5)
+                if t < 0.34 { let u=t/0.34; point=CGPoint(x:a.x+(b.x-a.x)*u,y:a.y+(b.y-a.y)*u) }
+                else { let u=(t-0.34)/0.66; point=CGPoint(x:b.x+(c.x-b.x)*u,y:b.y+(c.y-b.y)*u) }
             } else {
-                let angle = CGFloat.pi / 4 + t * 3 * CGFloat.pi / 2
-                point = CGPoint(x: 16 + cos(angle)*8, y:16 + sin(angle)*8)
+                let angle=CGFloat.pi/4+t*3*CGFloat.pi/2
+                point=CGPoint(x:16+cos(angle)*radius,y:16+sin(angle)*radius)
             }
             if i == 0 { p.move(to:point) } else { p.addLine(to:point) }
         }
         return p
     }
-    override init(frame frameRect: NSRect) {
-        super.init(frame:frameRect)
-        title = ""; isBordered = false; wantsLayer = true
-        image = NSImage(systemSymbolName:"arrow.clockwise",accessibilityDescription:nil)?.withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize:14,weight:.regular))
-        contentTintColor = .secondaryLabelColor
-        imagePosition = .imageOnly; imageScaling = .scaleNone
-        ink.isHidden = true
-        ink.bounds = CGRect(x:0,y:0,width:32,height:32); ink.position = CGPoint(x:16,y:16)
-        ink.isGeometryFlipped = false
+    override init(frame:NSRect) {
+        super.init(frame:frame)
+        title=""; isBordered=false; wantsLayer=true
+        ink.bounds=CGRect(x:0,y:0,width:32,height:32)
+        ink.anchorPoint=CGPoint(x:0.5,y:0.5); ink.position=CGPoint(x:16,y:16)
         layer?.addSublayer(ink)
-        symbol.bounds = CGRect(x:0,y:0,width:32,height:32)
-        symbol.anchorPoint = CGPoint(x:0.5,y:0.5)
-        symbol.position = CGPoint(x:16,y:16)
-        layer?.addSublayer(symbol)
-        updateSymbol()
-        image = nil
         for line in [stroke,head] {
-            line.fillColor = nil; line.lineWidth = 1.5; line.lineCap = .round; line.lineJoin = .round
+            line.fillColor=nil;line.lineWidth=1.4;line.lineCap = .round;line.lineJoin = .round
             ink.addSublayer(line)
         }
-        stroke.path = Self.path(check:false)
-        let angle = 7 * CGFloat.pi / 4
-        let tip = CGPoint(x:16+cos(angle)*8,y:16+sin(angle)*8)
-        let tangent = CGPoint(x:-sin(angle),y:cos(angle))
-        let wing = CGMutablePath()
-        wing.move(to:CGPoint(x:tip.x-tangent.x*4-tangent.y*3,y:tip.y-tangent.y*4+tangent.x*3))
+        stroke.path=Self.path(check:false)
+        let angle=7*CGFloat.pi/4
+        let tip=CGPoint(x:16+cos(angle)*Self.radius,y:16+sin(angle)*Self.radius)
+        // Arrowhead wings share the clockwise tangent, independently of its bounds.
+        let tangent=CGPoint(x:-sin(angle),y:cos(angle))
+        let wing=CGMutablePath()
+        wing.move(to:CGPoint(x:tip.x-tangent.x*3-tangent.y*2.5,y:tip.y-tangent.y*3+tangent.x*2.5))
         wing.addLine(to:tip)
-        wing.addLine(to:CGPoint(x:tip.x-tangent.x*4+tangent.y*3,y:tip.y-tangent.y*4-tangent.x*3))
-        head.path = wing
-    }
-    private func updateSymbol() {
-        let glyph = NSImage(systemSymbolName:"arrow.clockwise",accessibilityDescription:nil)!.withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize:14,weight:.regular))!
-        let canvas = NSImage(size:NSSize(width:32,height:32),flipped:false) { _ in
-            glyph.draw(in:NSRect(x:(32-glyph.size.width)/2,y:(32-glyph.size.height)/2,width:glyph.size.width,height:glyph.size.height))
-            let cg = NSGraphicsContext.current!.cgContext
-            cg.setBlendMode(.sourceIn)
-            cg.setFillColor(NSColor(calibratedWhite:0.52,alpha:1).cgColor)
-            cg.fill(CGRect(x:0,y:0,width:32,height:32))
-            return true
-        }
-        var rect=CGRect(x:0,y:0,width:32,height:32)
-        symbol.contents = canvas.cgImage(forProposedRect:&rect,context:nil,hints:nil)
-        symbol.contentsScale = 2
-    }
-    func hasFixedRotationCenter() -> Bool {
-        symbol.position == CGPoint(x:16,y:16) && symbol.anchorPoint == CGPoint(x:0.5,y:0.5) && symbol.bounds == CGRect(x:0,y:0,width:32,height:32) && CATransform3DIsIdentity(layer!.transform) && layer?.animation(forKey:"symbolRotation") == nil
+        wing.addLine(to:CGPoint(x:tip.x-tangent.x*3+tangent.y*2.5,y:tip.y-tangent.y*3-tangent.x*2.5))
+        head.path=wing
+        update(.idle)
     }
     required init?(coder:NSCoder) { fatalError("init(coder:) is unsupported") }
-    func update(_ next: Phase) {
-        let color = next == .failure ? NSColor.systemOrange : NSColor.secondaryLabelColor
-        CATransaction.begin(); CATransaction.setDisableActions(true)
-        stroke.strokeColor = color.cgColor; head.strokeColor = color.cgColor
-        CATransaction.commit()
-        updateSymbol()
+    func hasFixedRotationCenter()->Bool {
+        ink.position == CGPoint(x:16,y:16) && ink.anchorPoint == CGPoint(x:0.5,y:0.5) && CATransform3DIsIdentity(layer!.transform)
+    }
+    func update(_ next:Phase) {
+        effectiveAppearance.performAsCurrentDrawingAppearance {
+            CATransaction.begin();CATransaction.setDisableActions(true)
+            stroke.strokeColor=NSColor.secondaryLabelColor.cgColor
+            head.strokeColor=NSColor.secondaryLabelColor.cgColor
+            CATransaction.commit()
+        }
         isEnabled = next != .running
-        let description = next == .running ? "正在刷新" : next == .success ? "刷新完成" : next == .failure ? "刷新完成，部分数据未获取" : "刷新额度与连接状态"
-        toolTip = description; setAccessibilityLabel(description)
+        let text = next == .running ? "正在刷新" : next == .success ? "刷新完成" : next == .failure ? "刷新完成，部分数据未获取" : "刷新额度与连接状态"
+        toolTip=text;setAccessibilityLabel(text)
         guard next != phase else { return }
-        let reduce = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-        // Rotate the same SF Symbol used at rest, around the fixed button center.
-        // Never substitute the hand-drawn morph path while spinning.
-        let rotation = symbol.presentation()?.transform ?? CATransform3DIdentity
-        symbol.removeAnimation(forKey:"symbolRotation")
-        if next == .running {
-            image = NSImage(systemSymbolName:"arrow.clockwise",accessibilityDescription:nil)?.withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize:14,weight:.regular))
-            image = nil; symbol.isHidden = false
-            ink.isHidden = true
-            if !reduce {
-                let spin = CABasicAnimation(keyPath:"transform.rotation.z")
-                spin.fromValue = 0; spin.toValue = 2 * Double.pi
-                spin.duration = 1.1; spin.repeatCount = .infinity
-                spin.timingFunction = CAMediaTimingFunction(name:.linear)
-                symbol.add(spin,forKey:"symbolRotation")
-            }
-            phase = next
-            return
-        }
-        if !reduce && phase == .running {
-            let settle = CABasicAnimation(keyPath:"transform")
-            settle.fromValue = NSValue(caTransform3D:rotation)
-            settle.toValue = NSValue(caTransform3D:CATransform3DIdentity)
-            settle.duration = 0.35
-            settle.timingFunction = CAMediaTimingFunction(controlPoints:0.16,1,0.3,1)
-            symbol.add(settle,forKey:"symbolSettle")
-        }
-        symbol.isHidden = next != .idle
-        let oldPath = stroke.presentation()?.path ?? stroke.path
-        let oldTransform = ink.presentation()?.transform ?? ink.transform
-        ink.removeAnimation(forKey:"rotation")
-        CATransaction.begin(); CATransaction.setDisableActions(true)
-        ink.transform = CATransform3DIdentity
-        stroke.path = Self.path(check:next == .success)
-        head.opacity = next == .success ? 0 : 1
+        let reduce=NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        let wasRunning=phase == .running
+        let currentPath=stroke.presentation()?.path ?? stroke.path
+        let transform=ink.presentation()?.transform ?? CATransform3DIdentity
+        let currentHead=head.presentation()?.opacity ?? head.opacity
+        ink.removeAllAnimations();stroke.removeAllAnimations();head.removeAllAnimations()
+        let settleTime:Double = wasRunning && !reduce ? 0.22 : 0
+        let morphTime:Double = reduce ? 0 : 0.38
+        let now=CACurrentMediaTime()
+        CATransaction.begin();CATransaction.setDisableActions(true)
+        ink.transform=CATransform3DIdentity
+        stroke.path=Self.path(check:next == .success)
+        head.opacity=next == .success ? 0 : 1
+        ink.isHidden=next == .failure
         CATransaction.commit()
+        image=next == .failure ? NSImage(systemSymbolName:"exclamationmark.circle",accessibilityDescription:nil)?.withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize:14,weight:.regular)) : nil
+        contentTintColor = .secondaryLabelColor
         if !reduce {
-            let morph = CABasicAnimation(keyPath:"path")
-            morph.fromValue = oldPath; morph.toValue = stroke.path; morph.duration = 0.55
-            morph.timingFunction = CAMediaTimingFunction(controlPoints:0.22,0.80,0.25,1)
+            if wasRunning {
+                var angle=atan2(transform.m12,transform.m11)
+                if angle < 0 { angle += 2 * .pi }
+                let settle=CABasicAnimation(keyPath:"transform.rotation.z")
+                settle.fromValue=angle;settle.toValue=2*Double.pi;settle.duration=settleTime
+                settle.timingFunction=CAMediaTimingFunction(controlPoints:0.2,0.8,0.3,1)
+                ink.add(settle,forKey:"settle")
+            }
+            // Finish rotation before changing the path, avoiding a twisting checkmark.
+            let morph=CABasicAnimation(keyPath:"path")
+            morph.fromValue=currentPath;morph.toValue=stroke.path
+            morph.beginTime=now+settleTime;morph.duration=morphTime
+            morph.fillMode = .backwards
+            morph.timingFunction=CAMediaTimingFunction(controlPoints:0.25,0.1,0.25,1)
             stroke.add(morph,forKey:"morph")
-            let settle = CABasicAnimation(keyPath:"transform")
-            settle.fromValue = NSValue(caTransform3D:oldTransform); settle.toValue = NSValue(caTransform3D:CATransform3DIdentity)
-            settle.duration = 0.40; settle.timingFunction = CAMediaTimingFunction(controlPoints:0.16,1,0.30,1)
-            if next != .running { ink.add(settle,forKey:"settle") }
-            let fade = CABasicAnimation(keyPath:"opacity")
-            fade.fromValue = head.presentation()?.opacity ?? (phase == .success ? 0 : 1)
-            fade.toValue = head.opacity; fade.duration = 0.25; head.add(fade,forKey:"fade")
+            let fade=CABasicAnimation(keyPath:"opacity")
+            fade.fromValue=currentHead;fade.toValue=head.opacity
+            fade.beginTime=now+settleTime;fade.duration=morphTime
+            fade.fillMode = .backwards;head.add(fade,forKey:"fade")
+            if next == .running {
+                let spin=CABasicAnimation(keyPath:"transform.rotation.z")
+                spin.fromValue=0;spin.toValue=2*Double.pi;spin.duration=1.1;spin.repeatCount = .infinity
+                spin.beginTime=now+(phase == .success ? morphTime : 0)
+                spin.timingFunction=CAMediaTimingFunction(name:.linear)
+                ink.add(spin,forKey:"rotation")
+            }
         }
-        // Partial failure never morphs to a success checkmark.
-        if next == .failure { image = NSImage(systemSymbolName:"exclamationmark.circle",accessibilityDescription:nil); ink.isHidden = true }
-        else if next == .idle { image = nil; ink.isHidden = true }
-        else { image = nil; ink.isHidden = false }
-        phase = next
+        phase=next
     }
 }
 final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
@@ -425,10 +396,10 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return
         }
         let dashboard = dashboardView(state: state)
-        let root = NSView(frame: NSRect(x: 0, y: 0, width: 352, height: dashboard.frame.height + 66))
-        dashboard.setFrameOrigin(NSPoint(x: 6, y: 66))
+        let root = NSView(frame: NSRect(x: 0, y: 0, width: 352, height: dashboard.frame.height + 74))
+        dashboard.setFrameOrigin(NSPoint(x: 6, y: 74))
         root.addSubview(dashboard)
-        let line = NSBox(frame: NSRect(x: 22, y: 64, width: 308, height: 1))
+        let line = NSBox(frame: NSRect(x: 16, y: 72, width: 320, height: 1))
         line.boxType = .separator
         root.addSubview(line)
         let launchers = launcherView()
@@ -480,7 +451,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
     func dashboardView(state: ProbeState) -> NSView {
         let extra = (snapshot.resetCredits != nil ? 24 : 0) + (snapshot.ordinaryUsageAllowed == false ? 24 : 0)
-        let height = CGFloat(154 + extra)
+        let height = CGFloat(172 + extra)
         let view = NSView(frame: NSRect(x: 0, y: 0, width: 340, height: height))
         func label(_ text: String, _ x: CGFloat, _ y: CGFloat, _ width: CGFloat, _ size: CGFloat, _ color: NSColor = .labelColor, _ weight: NSFont.Weight = .regular) -> NSTextField {
             let field = NSTextField(labelWithString: text)
@@ -490,23 +461,23 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
             view.addSubview(field)
             return field
         }
-        _ = label("AI Dock", 16, height - 38, 198, 10, .secondaryLabelColor)
-        _ = label(weeklyRemaining.map { "本周剩余  \(Int(($0 * 100).rounded()))%" } ?? "周额度暂不可用", 16, height - 65, 308, 21, .labelColor, .semibold)
+        _ = label("AI Dock", 10, height - 50, 198, 10, .secondaryLabelColor)
+        _ = label(weeklyRemaining.map { "本周剩余  \(Int(($0 * 100).rounded()))%" } ?? "周额度暂不可用", 10, height - 83, 320, 21, .labelColor, .semibold)
         let quotaDetail = weeklyRemaining == nil
             ? (quotaBusy ? "正在读取 Codex 额度…" : (snapshot.lines.first ?? "当前账户未提供周额度"))
             : Quota.countdown(snapshot.resetsAt)
-        _ = label(quotaDetail, 16, height - 91, 308, 12, .secondaryLabelColor)
-        var nextY = height - 115
+        _ = label(quotaDetail, 10, height - 109, 320, 12, .secondaryLabelColor)
+        var nextY = height - 133
         if let credits = snapshot.resetCredits {
-            _ = label("可用重置  \(credits) 次", 16, nextY, 308, 12)
+            _ = label("可用重置  \(credits) 次", 10, nextY, 320, 12)
             nextY -= 24
         }
         if snapshot.ordinaryUsageAllowed == false {
-            _ = label("常规额度暂不可用", 16, nextY, 308, 12, .secondaryLabelColor)
+            _ = label("常规额度暂不可用", 10, nextY, 320, 12, .secondaryLabelColor)
         }
         let targets: [(String, Bool, Int?, Bool)] = [("ChatGPT", checked, latency, probeBusy), ("Google", googleChecked, googleLatency, googleBusy)]
         for (index, target) in targets.enumerated() {
-            let x = CGFloat(16 + index * 160)
+            let x = CGFloat(10 + index * 166)
             let current = ProbeState.state(checked: target.1, latency: target.2, threshold: threshold)
             _ = label(target.0, x, 34, 148, 11, .secondaryLabelColor, .medium)
             let swatch = NSView(frame: NSRect(x: x, y: 23, width: 7, height: 14))
@@ -527,7 +498,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         for (index, action) in actions.enumerated() {
             if index == 0 {
                 refreshGlyph.target = self; refreshGlyph.action = action.2
-                refreshGlyph.frame = NSRect(x:220,y:Int(height)-36,width:32,height:32)
+                refreshGlyph.frame = NSRect(x:226,y:Int(height)-48,width:32,height:32)
                 let phase: RefreshGlyphButton.Phase = manualRefresh ? .running : refreshFinished != nil ? (refreshHadFailure ? .failure : .success) : .idle
                 refreshGlyph.update(phase)
                 view.addSubview(refreshGlyph)
@@ -537,7 +508,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
             button.isBordered = false; button.contentTintColor = .secondaryLabelColor
             button.image = button.image?.withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize:14,weight:.regular))
             button.imagePosition = .imageOnly; button.imageScaling = .scaleNone
-            button.frame = NSRect(x:220+index*36,y:Int(height)-36,width:32,height:32)
+            button.frame = NSRect(x:226+index*36,y:Int(height)-48,width:32,height:32)
             button.toolTip = action.1; button.setAccessibilityLabel(action.1)
             view.addSubview(button)
         }
@@ -566,7 +537,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
             button.imagePosition = .imageLeading
             button.imageScaling = .scaleProportionallyDown
-            button.frame = NSRect(x: 16 + index * 160, y: 8, width: 148, height: 44)
+            button.frame = NSRect(x: 10 + index * 166, y: 12, width: 154, height: 44)
             button.setAccessibilityLabel(entry.0)
             view.addSubview(button)
         }
@@ -639,6 +610,14 @@ if CommandLine.arguments.contains("--self-test") {
     RefreshGlyphButton.path(check:false).applyWithBlock { arrowElements.append($0.pointee.type) }
     RefreshGlyphButton.path(check:true).applyWithBlock { checkElements.append($0.pointee.type) }
     precondition(arrowElements == checkElements && arrowElements.count == 49)
+    RefreshGlyphButton.path(check:false).applyWithBlock { element in
+        let point=element.pointee.points[0]
+        precondition(abs(hypot(point.x-16,point.y-16)-RefreshGlyphButton.radius)<0.0001)
+    }
+    for angle in stride(from:0.0,to:2*Double.pi,by:Double.pi/24) {
+        let x=cos(angle)*Double(RefreshGlyphButton.radius), y=sin(angle)*Double(RefreshGlyphButton.radius)
+        precondition(abs(hypot(x,y)-Double(RefreshGlyphButton.radius))<0.0001)
+    }
     let _ = NSApplication.shared
     let fixture = App()
     let settings = fixture.settingsView()

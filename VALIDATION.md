@@ -26,3 +26,5 @@ Do not describe the candidate as publicly released or fully cross-platform teste
 - README images use synthetic values rendered from actual native view code; no live account screenshots uploaded. Energy review is in PERFORMANCE.md; only one process snapshot measured.
 
 - Follow-up: rotate only an explicitly centered child symbol layer, never the AppKit-owned button layer. Verified native views at 0/90/180/270 degrees and fixed-center assertions after button relocation. Quota heading now reads 本周剩余.
+
+- Rotation follow-up: one circular vector path with a known geometric center replaces SF Symbol bounding-box rotation. Arc radius invariance checked across a full turn. Color follows effective appearance; finish rotation before morph; reverse morph retained. Toolbar top/right and launcher bottom/side control margins are 16 pt.
