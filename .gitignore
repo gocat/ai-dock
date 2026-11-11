@@ -1,0 +1,13 @@
+.DS_Store
+build/
+dist/
+Protocol/
+previews/
+Resources/Codex.png
+Resources/CodexMono.svg
+Resources/ClashMono.svg
+Resources/Companion.icns
+.env
+.env.*
+*.p12
+*.mobileprovision

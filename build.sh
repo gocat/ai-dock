@@ -1,0 +1,32 @@
+#!/bin/bash
+set -euo pipefail
+cd "$(dirname "$0")"
+mode="${1:-review}"
+if [[ "$mode" != review && "$mode" != local-icons ]]; then
+  echo 'Usage: bash build.sh [review|local-icons]' >&2
+  exit 2
+fi
+app='build/AI Dock.app'
+bundle_id="${AI_DOCK_BUNDLE_ID:-app.aidock.desktop}"
+arch="$(uname -m)"
+mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources" build/module-cache
+# Always start from a clean resource set so private preview assets cannot leak.
+find "$app/Contents/Resources" -maxdepth 1 -type f -delete
+bash scripts/generate-icon.sh
+cp build/Companion.icns "$app/Contents/Resources/Companion.icns"
+if [[ "$mode" == local-icons ]]; then
+  cp Resources/CodexMono.svg Resources/ClashMono.svg "$app/Contents/Resources/"
+fi
+swiftc -swift-version 5 -O -target "${arch}-apple-macos14.0" -module-cache-path build/module-cache -framework AppKit Sources/main.swift -o "$app/Contents/MacOS/CodexCompanion"
+python3 - "$app/Contents/Info.plist" "$bundle_id" <<'PY'
+import plistlib,sys
+info={'CFBundleExecutable':'CodexCompanion','CFBundleIdentifier':sys.argv[2],
+      'CFBundleName':'AI Dock','CFBundleDisplayName':'AI Dock','CFBundleIconFile':'Companion',
+      'CFBundlePackageType':'APPL','LSApplicationCategoryType':'public.app-category.utilities',
+      'CFBundleVersion':'5','CFBundleShortVersionString':'0.1.0','LSMinimumSystemVersion':'14.0',
+      'LSUIElement':True,'NSHighResolutionCapable':True}
+with open(sys.argv[1],'wb') as f:plistlib.dump(info,f)
+PY
+codesign --force --sign - "$app"
+codesign --verify --deep --strict "$app"
+"$app/Contents/MacOS/CodexCompanion" --self-test
