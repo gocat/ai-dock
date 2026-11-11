@@ -46,3 +46,9 @@ Source license: MIT, Copyright (c) 2026 gocat. Source publication is authorized;
 - MIT license confirmed, copyright gocat.
 - Selected dark showcase added with illustration disclosure; original rendered UI previews retained.
 - Source-first distribution; no notarized app package or third-party brand assets bundled.
+
+## Bilingual interface
+
+- Added System / Simplified Chinese / English selection in Settings, with immediate updates and persistence.
+- Localized status, countdowns, accessibility descriptions, settings and alerts; retained fixed popover dimensions.
+- Added an English README and reduced the main README to the selected dark showcase only.

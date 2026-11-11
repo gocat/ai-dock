@@ -17,7 +17,7 @@ cp build/Companion.icns "$app/Contents/Resources/Companion.icns"
 if [[ "$mode" == local-icons ]]; then
   cp Resources/CodexMono.svg Resources/ClashMono.svg "$app/Contents/Resources/"
 fi
-swiftc -swift-version 5 -O -target "${arch}-apple-macos14.0" -module-cache-path build/module-cache -framework AppKit Sources/main.swift -o "$app/Contents/MacOS/CodexCompanion"
+swiftc -swift-version 5 -O -target "${arch}-apple-macos14.0" -module-cache-path build/module-cache -framework AppKit Sources/main.swift Sources/Localization.swift -o "$app/Contents/MacOS/CodexCompanion"
 python3 - "$app/Contents/Info.plist" "$bundle_id" <<'PY'
 import plistlib,sys
 info={'CFBundleExecutable':'CodexCompanion','CFBundleIdentifier':sys.argv[2],

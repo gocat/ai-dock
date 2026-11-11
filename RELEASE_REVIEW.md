@@ -10,7 +10,7 @@
 
 ## Validation
 
-Build/self-tests, ad-hoc signature and targeted source/package scans are recorded in VALIDATION.md. No account credentials or diagnostic output belong in the repository. Complete sleep/wake, real expired-login and cross-version Mac coverage remain pending. Existing remote history must also be reviewed before changing visibility.
+Build/self-tests, ad-hoc signature and targeted source/package scans are recorded in VALIDATION.md. No account credentials or diagnostic output belong in the repository. Complete sleep/wake, real expired-login and cross-version Mac coverage remain pending. Existing remote history was checked and backed up locally before replacing author/committer email metadata with the gocat GitHub noreply address.
 
 ## Distribution limits
 
