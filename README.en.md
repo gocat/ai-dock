@@ -30,7 +30,9 @@ Quota reads currently use the Codex CLI inside `/Applications/ChatGPT.app` and i
 
 ![AI Dock showcase](docs/images/showcase-dark-en.jpg)
 
-The outer-arc examples show 100%, 50%, and 0% remaining quota. Green, amber, and red center dots mean OK, slow, and unreachable. Zero quota does not mean a network failure; unknown quota uses a dashed arc. Examples show color mode, and connectivity does not establish VPN or Codex session health.
+![Animated icon guide: outer arc shows quota; center dot shows OK, slow and unreachable](docs/images/icon-states-en.gif)
+
+The animated guide is about 22 KB. The outer arc shows 100%, 50%, and 0% remaining quota. Green, amber, and red center dots mean OK, slow, and unreachable. Zero quota does not mean a network failure; unknown quota uses a dashed arc. Examples show color mode, and connectivity does not establish VPN or Codex session health.
 
 Supports light and dark appearances. This AI-assisted showcase uses sample data and includes redrawn visual details. Application brand marks identify the launch targets; the default source build uses neutral system symbols. The showcase predates the language selector.
 

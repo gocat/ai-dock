@@ -55,3 +55,5 @@ Do not describe the candidate as publicly released or fully cross-platform teste
 - English showcase: imagegen text-localization edit of the exact approved dark v5 image; inspected English text, app glyphs, status dots, menu spacing and notch alignment. Original Chinese image retained. Each README displays one image in its corresponding language.
 
 - Showcase state legend: color-mode quota examples 100%/50%/0% hold the green dot constant; connectivity examples hold the full arc constant and vary green/yellow/red. Compared the illustrated meanings against statusIcon/LampStyle. Unknown quota is described as dashed, distinct from zero; HTTPS probe boundaries retained. Chinese and English versions visually reviewed; no application behavior changed.
+
+- Lightweight state GIF: generated with AppKit/ImageIO from flat vector geometry matching the menu gauge (270° arc, bottom gap). 14 timed frames; Chinese 21,325 bytes, English 21,901 bytes; loop enabled, key quota and network states held for readability. Reviewed full/empty/slow/unreachable frames; main showcase reverted to the approved v5 composition, with this separate animated legend beneath. App behavior unchanged.
