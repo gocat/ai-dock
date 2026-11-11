@@ -2,6 +2,12 @@ import AppKit
 import Foundation
 import QuartzCore
 
+// Semantic foreground stays legible in the popover's vibrant material.
+// Secondary hierarchy comes from type size and weight, not a low-contrast gray.
+extension NSColor {
+    static var aidockSecondary: NSColor { .labelColor }
+}
+
 struct QuotaSnapshot {
     var lines: [String]
     var weeklyRemaining: Double? = nil
@@ -153,7 +159,7 @@ enum ProbeState: Equatable {
     }
     var color: NSColor {
         switch self {
-        case .unknown: return .secondaryLabelColor
+        case .unknown: return .aidockSecondary
         case .normal: return .systemGreen
         case .slow: return .systemYellow
         case .failed: return .systemRed
@@ -161,11 +167,11 @@ enum ProbeState: Equatable {
     }
 }
 enum LampStyle: Equatable {
-    case hollow, neutral, green, yellow, red
+    case hollow, white, neutral, green, yellow, red
     static func resolve(state: ProbeState, monochrome: Bool, persistentFailure: Bool) -> LampStyle {
         if monochrome {
             if state == .unknown { return .hollow }
-            return state == .failed && persistentFailure ? .red : .neutral
+            return state == .failed && persistentFailure ? .red : .white
         }
         switch state {
         case .unknown: return .neutral
@@ -176,7 +182,8 @@ enum LampStyle: Equatable {
     }
     var color: NSColor {
         switch self {
-        case .hollow, .neutral: return .secondaryLabelColor
+        case .hollow, .white: return .white
+        case .neutral: return .aidockSecondary
         case .green: return .systemGreen
         case .yellow: return .systemYellow
         case .red: return .systemRed
@@ -221,115 +228,52 @@ func probeLabel(_ name: String, checked: Bool, latency: Int?, threshold: Int) ->
 }
 final class RefreshGlyphButton: NSButton {
     enum Phase { case idle, running, success, failure }
-    private let ink = CALayer()
-    private let stroke = CAShapeLayer()
-    private let head = CAShapeLayer()
+    private let glyph = NSImageView(frame:NSRect(x:0,y:0,width:32,height:32))
     private var phase: Phase = .idle
-    static let radius: CGFloat = 6.8
-    static func path(check: Bool) -> CGPath {
-        let p = CGMutablePath()
-        for i in 0...48 {
-            let t = CGFloat(i)/48
-            let point: CGPoint
-            if check {
-                let a=CGPoint(x:9.5,y:16), b=CGPoint(x:14,y:20.5), c=CGPoint(x:23,y:10.5)
-                if t < 0.34 { let u=t/0.34; point=CGPoint(x:a.x+(b.x-a.x)*u,y:a.y+(b.y-a.y)*u) }
-                else { let u=(t-0.34)/0.66; point=CGPoint(x:b.x+(c.x-b.x)*u,y:b.y+(c.y-b.y)*u) }
-            } else {
-                let angle=CGFloat.pi/4+t*3*CGFloat.pi/2
-                point=CGPoint(x:16+cos(angle)*radius,y:16+sin(angle)*radius)
-            }
-            if i == 0 { p.move(to:point) } else { p.addLine(to:point) }
-        }
-        return p
-    }
     override init(frame:NSRect) {
         super.init(frame:frame)
-        title=""; isBordered=false; wantsLayer=true
-        ink.bounds=CGRect(x:0,y:0,width:32,height:32)
-        ink.anchorPoint=CGPoint(x:0.5,y:0.5); ink.position=CGPoint(x:16,y:16)
-        layer?.addSublayer(ink)
-        for line in [stroke,head] {
-            line.fillColor=nil;line.lineWidth=1.4;line.lineCap = .round;line.lineJoin = .round
-            ink.addSublayer(line)
-        }
-        stroke.path=Self.path(check:false)
-        let angle=7*CGFloat.pi/4
-        let tip=CGPoint(x:16+cos(angle)*Self.radius,y:16+sin(angle)*Self.radius)
-        // Exact horizontal/vertical wings: symmetric 90-degree arrowhead.
-        // Its bisector matches the circle tangent at the upper-right endpoint.
-        let wing=CGMutablePath()
-        let length:CGFloat = 4.2
-        wing.move(to:CGPoint(x:tip.x-length,y:tip.y))
-        wing.addLine(to:tip)
-        wing.addLine(to:CGPoint(x:tip.x,y:tip.y-length))
-        head.path=wing
+        title="";isBordered=false;wantsLayer=true
+        glyph.imageScaling = .scaleNone
+        glyph.wantsLayer=true
+        addSubview(glyph)
         update(.idle)
     }
     required init?(coder:NSCoder) { fatalError("init(coder:) is unsupported") }
     func hasFixedRotationCenter()->Bool {
-        ink.position == CGPoint(x:16,y:16) && ink.anchorPoint == CGPoint(x:0.5,y:0.5) && CATransform3DIsIdentity(layer!.transform)
+        glyph.frame.size == NSSize(width:32,height:32) && CATransform3DIsIdentity(layer!.transform)
     }
     func update(_ next:Phase) {
-        effectiveAppearance.performAsCurrentDrawingAppearance {
-            CATransaction.begin();CATransaction.setDisableActions(true)
-            stroke.strokeColor=NSColor.secondaryLabelColor.cgColor
-            head.strokeColor=NSColor.secondaryLabelColor.cgColor
-            CATransaction.commit()
-        }
+        let name = next == .success ? "checkmark" : next == .failure ? "exclamationmark.circle" : "arrow.clockwise"
+        let symbol=NSImage(systemSymbolName:name,accessibilityDescription:nil)?.withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize:14,weight:.regular))
+        glyph.contentTintColor = .labelColor
         isEnabled = next != .running
         let text = next == .running ? "正在刷新" : next == .success ? "刷新完成" : next == .failure ? "刷新完成，部分数据未获取" : "刷新额度与连接状态"
         toolTip=text;setAccessibilityLabel(text)
-        guard next != phase else { return }
+        guard next != phase || glyph.image == nil else { return }
         let reduce=NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-        let wasRunning=phase == .running
-        let currentPath=stroke.presentation()?.path ?? stroke.path
-        let transform=ink.presentation()?.transform ?? CATransform3DIdentity
-        let currentHead=head.presentation()?.opacity ?? head.opacity
-        ink.removeAllAnimations();stroke.removeAllAnimations();head.removeAllAnimations()
-        let settleTime:Double = wasRunning && !reduce ? 0.22 : 0
-        let morphTime:Double = reduce ? 0 : 0.38
-        let now=CACurrentMediaTime()
+        glyph.layer?.removeAllAnimations()
         CATransaction.begin();CATransaction.setDisableActions(true)
-        ink.transform=CATransform3DIdentity
-        stroke.path=Self.path(check:next == .success)
-        head.opacity=next == .success ? 0 : 1
-        ink.isHidden=next == .failure
+        glyph.layer?.transform=CATransform3DIdentity
+        glyph.image=symbol
         CATransaction.commit()
-        image=next == .failure ? NSImage(systemSymbolName:"exclamationmark.circle",accessibilityDescription:nil)?.withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize:14,weight:.regular)) : nil
-        contentTintColor = .secondaryLabelColor
-        if !reduce {
-            if wasRunning {
-                var angle=atan2(transform.m12,transform.m11)
-                if angle < 0 { angle += 2 * .pi }
-                let settle=CABasicAnimation(keyPath:"transform.rotation.z")
-                settle.fromValue=angle;settle.toValue=2*Double.pi;settle.duration=settleTime
-                settle.timingFunction=CAMediaTimingFunction(controlPoints:0.2,0.8,0.3,1)
-                ink.add(settle,forKey:"settle")
-            }
-            // Finish rotation before changing the path, avoiding a twisting checkmark.
-            let morph=CABasicAnimation(keyPath:"path")
-            morph.fromValue=currentPath;morph.toValue=stroke.path
-            morph.beginTime=now+settleTime;morph.duration=morphTime
-            morph.fillMode = .backwards
-            morph.timingFunction=CAMediaTimingFunction(controlPoints:0.25,0.1,0.25,1)
-            stroke.add(morph,forKey:"morph")
-            let fade=CABasicAnimation(keyPath:"opacity")
-            fade.fromValue=currentHead;fade.toValue=head.opacity
-            fade.beginTime=now+settleTime;fade.duration=morphTime
-            fade.fillMode = .backwards;head.add(fade,forKey:"fade")
-            if next == .running {
-                let spin=CABasicAnimation(keyPath:"transform.rotation.z")
-                spin.fromValue=0;spin.toValue=2*Double.pi;spin.duration=1.1;spin.repeatCount = .infinity
-                spin.beginTime=now+(phase == .success ? morphTime : 0)
-                spin.timingFunction=CAMediaTimingFunction(name:.linear)
-                ink.add(spin,forKey:"rotation")
-            }
+        // Native symbols retain their exact contours in both directions.
+        if !reduce && next != .running {
+            let transition=CATransition()
+            transition.type = .fade;transition.duration=0.28
+            transition.timingFunction=CAMediaTimingFunction(name:.easeInEaseOut)
+            glyph.layer?.add(transition,forKey:"symbolTransition")
+        }
+        if !reduce && next == .running {
+            let spin=CABasicAnimation(keyPath:"transform.rotation.z")
+            spin.fromValue=0;spin.toValue=2*Double.pi
+            spin.duration=1.1;spin.repeatCount = .infinity
+            spin.timingFunction=CAMediaTimingFunction(name:.linear)
+            glyph.layer?.add(spin,forKey:"rotation")
         }
         phase=next
     }
 }
-final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
+final class App: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopoverDelegate {
     var status: NSStatusItem!; var timer: Timer?
     let popover = NSPopover()
     var manualRefresh = false
@@ -358,6 +302,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         status.button?.target = self
         status.button?.action = #selector(togglePanel)
         popover.behavior = .transient
+        popover.delegate = self
         popover.contentViewController = NSViewController()
         refreshMenu(); refresh()
         DispatchQueue.main.async { if !self.popover.isShown { self.togglePanel() } }
@@ -397,10 +342,10 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return
         }
         let dashboard = dashboardView(state: state)
-        let root = NSView(frame: NSRect(x: 0, y: 0, width: 352, height: dashboard.frame.height + 74))
-        dashboard.setFrameOrigin(NSPoint(x: 6, y: 74))
+        let root = NSView(frame: NSRect(x: 0, y: 0, width: 320, height: dashboard.frame.height + 56))
+        dashboard.setFrameOrigin(NSPoint(x: 6, y: 56))
         root.addSubview(dashboard)
-        let line = NSBox(frame: NSRect(x: 16, y: 72, width: 320, height: 1))
+        let line = NSBox(frame: NSRect(x: 12, y: 62, width: 296, height: 1))
         line.boxType = .separator
         root.addSubview(line)
         let launchers = launcherView()
@@ -411,12 +356,14 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
     @objc func togglePanel() {
         if popover.isShown { popover.performClose(nil); return }
+        settingsOpen = false
         refreshMenu()
         if let button = status.button {
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
             popover.contentViewController?.view.window?.makeKey()
         }
     }
+    func popoverDidClose(_ notification: Notification) { settingsOpen = false }
     @objc func openSettings(_ sender: NSButton) { settingsOpen = true; refreshMenu() }
     @objc func closeSettings() { settingsOpen = false; refreshMenu() }
     @objc func setThresholdChoice(_ sender: NSSegmentedControl) {
@@ -426,34 +373,51 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         refreshMenu()
     }
     func settingsView() -> NSView {
-        let view = NSView(frame:NSRect(x:0,y:0,width:352,height:242))
-        let back = NSButton(title:"返回",target:self,action:#selector(closeSettings))
-        back.image = NSImage(systemSymbolName:"chevron.left",accessibilityDescription:nil)
-        back.imagePosition = .imageLeading; back.isBordered = false
-        back.frame = NSRect(x:16,y:196,width:72,height:32)
-        back.setAccessibilityLabel("返回状态面板"); view.addSubview(back)
-        let title = NSTextField(labelWithString:"设置")
-        title.font = .systemFont(ofSize:14,weight:.semibold); title.frame = NSRect(x:148,y:199,width:70,height:24); view.addSubview(title)
-        let mono = NSButton(checkboxWithTitle:"单色菜单栏图标",target:self,action:#selector(toggleMonochrome))
-        mono.state = monochrome ? .on : .off; mono.frame = NSRect(x:24,y:155,width:304,height:28); view.addSubview(mono)
-        let label = NSTextField(labelWithString:"偏慢阈值")
-        label.frame = NSRect(x:24,y:121,width:100,height:24); view.addSubview(label)
-        let choices = NSSegmentedControl(labels:["1 秒","2 秒","3 秒","5 秒"],trackingMode:.selectOne,target:self,action:#selector(setThresholdChoice(_:)))
-        choices.frame = NSRect(x:120,y:118,width:208,height:28)
-        choices.selectedSegment = [1000,2000,3000,5000].firstIndex(of:threshold) ?? 2
-        choices.setAccessibilityLabel("偏慢阈值"); view.addSubview(choices)
-        let sound = NSButton(checkboxWithTitle:"异常提示音",target:self,action:#selector(toggleSound))
-        sound.state = UserDefaults.standard.bool(forKey:"sound") ? .on : .off
-        sound.frame = NSRect(x:24,y:77,width:304,height:28); view.addSubview(sound)
-        let note = NSTextField(labelWithString:"额度每 5 分钟、连通性每 30 秒刷新")
-        note.textColor = .secondaryLabelColor; note.font = .systemFont(ofSize:11)
-        note.frame = NSRect(x:24,y:31,width:304,height:24); view.addSubview(note)
+        let view = NSView(frame:NSRect(x:0,y:0,width:320,height:222))
+        let back = NSButton(image:NSImage(systemSymbolName:"chevron.left",accessibilityDescription:"返回")!,target:self,action:#selector(closeSettings))
+        back.isBordered=false;back.contentTintColor = .aidockSecondary
+        back.frame=NSRect(x:8,y:178,width:32,height:32)
+        back.toolTip="返回首页";back.setAccessibilityLabel("返回首页");view.addSubview(back)
+        func text(_ title:String,_ x:CGFloat,_ y:CGFloat,_ width:CGFloat,_ size:CGFloat = 12)->NSTextField {
+            let label=NSTextField(labelWithString:title)
+            label.font = .systemFont(ofSize:size)
+            label.frame=NSRect(x:x,y:y,width:width,height:22)
+            view.addSubview(label);return label
+        }
+        let title=text("设置",44,182,220,14);title.font = .systemFont(ofSize:14,weight:.semibold)
+        title.sizeToFit();title.setFrameOrigin(NSPoint(x:44,y:194-title.frame.height/2))
+        func toggleRow(_ title:String,_ centerY:CGFloat,_ state:NSControl.StateValue,_ action:Selector) {
+            let label=text(title,16,0,224)
+            label.sizeToFit();label.setFrameOrigin(NSPoint(x:16,y:centerY-label.frame.height/2))
+            let toggle=NSSwitch()
+            toggle.controlSize = .small
+            toggle.sizeToFit()
+            toggle.setFrameOrigin(NSPoint(x:304-toggle.frame.width,y:centerY-toggle.frame.height/2))
+            toggle.target=self;toggle.action=action;toggle.state=state
+            toggle.setAccessibilityLabel(title)
+            view.addSubview(toggle)
+        }
+        toggleRow("单色菜单栏图标",153,monochrome ? .on : .off,#selector(toggleMonochrome))
+        toggleRow("异常提示音",117,UserDefaults.standard.bool(forKey:"sound") ? .on : .off,#selector(toggleSound))
+        let separator=NSBox(frame:NSRect(x:16,y:96,width:288,height:1));separator.boxType = .separator;view.addSubview(separator)
+        let thresholdLabel = text("超过多久算偏慢",16,66,108)
+        thresholdLabel.sizeToFit();thresholdLabel.setFrameOrigin(NSPoint(x:16,y:76-thresholdLabel.frame.height/2))
+        let choices=NSSegmentedControl(labels:["1 秒","2 秒","3 秒","5 秒"],trackingMode:.selectOne,target:self,action:#selector(setThresholdChoice(_:)))
+        choices.controlSize = .small
+        choices.font = .systemFont(ofSize:11)
+        choices.frame=NSRect(x:128,y:66,width:176,height:20)
+        choices.selectedSegment=[1000,2000,3000,5000].firstIndex(of:threshold) ?? 2
+        choices.setAccessibilityLabel("延迟超过所选时间时显示偏慢")
+        choices.toolTip="仅改变偏慢状态标识，不触发弹窗提醒";view.addSubview(choices)
+        let noteTitle=text("超过所选时间仅标为偏慢，不弹窗",16,37,288,10)
+        noteTitle.textColor = .aidockSecondary
+        let note=text("自动更新：额度 5 分钟 · 网络状态 30 秒",16,13,288,10)
+        note.textColor = .aidockSecondary
         return view
     }
     func dashboardView(state: ProbeState) -> NSView {
-        let extra = (snapshot.resetCredits != nil ? 24 : 0) + (snapshot.ordinaryUsageAllowed == false ? 24 : 0)
-        let height = CGFloat(172 + extra)
-        let view = NSView(frame: NSRect(x: 0, y: 0, width: 340, height: height))
+        let height:CGFloat = 166
+        let view = NSView(frame: NSRect(x: 0, y: 0, width: 308, height: height))
         func label(_ text: String, _ x: CGFloat, _ y: CGFloat, _ width: CGFloat, _ size: CGFloat, _ color: NSColor = .labelColor, _ weight: NSFont.Weight = .regular) -> NSTextField {
             let field = NSTextField(labelWithString: text)
             field.font = .systemFont(ofSize: size, weight: weight)
@@ -462,32 +426,51 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
             view.addSubview(field)
             return field
         }
-        _ = label("AI Dock", 10, height - 50, 198, 10, .secondaryLabelColor)
-        _ = label(weeklyRemaining.map { "本周剩余  \(Int(($0 * 100).rounded()))%" } ?? "周额度暂不可用", 10, height - 83, 320, 21, .labelColor, .semibold)
+        _ = label("AI Dock", 6, height - 46, 198, 10, .aidockSecondary)
+        let quotaCard=NSView(frame:NSRect(x:6,y:54,width:296,height:70))
+        quotaCard.wantsLayer=true;quotaCard.layer?.cornerRadius=10
+        quotaCard.layer?.backgroundColor=NSColor.labelColor.withAlphaComponent(0.045).cgColor
+        view.addSubview(quotaCard)
+        _ = label("Codex", 16, height - 74, 180, 13, .labelColor, .semibold)
+        let percentage = label(weeklyRemaining.map { "\(Int(($0 * 100).rounded()))%" } ?? "—", 214, height - 74, 78, 12, .aidockSecondary)
+        percentage.alignment = .right
+        percentage.setAccessibilityLabel(weeklyRemaining.map { "Codex 本周剩余额度 \(Int(($0 * 100).rounded()))%" } ?? "Codex 本周额度不可用")
+        let track = NSView(frame:NSRect(x:18,y:82,width:272,height:6))
+        track.wantsLayer = true
+        track.layer?.cornerRadius = 3
+        track.layer?.backgroundColor = NSColor.quaternaryLabelColor.cgColor
+        track.layer?.masksToBounds = true
+        track.toolTip = "Codex 本周剩余额度；不是已用额度"
+        if let remaining = weeklyRemaining {
+            let fill = NSView(frame:NSRect(x:0,y:0,width:272 * min(1,max(0,remaining)),height:6))
+            fill.wantsLayer = true
+            fill.layer?.cornerRadius = 3
+            fill.layer?.backgroundColor = NSColor.controlAccentColor.cgColor
+            track.addSubview(fill)
+        }
+        view.addSubview(track)
         let quotaDetail = weeklyRemaining == nil
             ? (quotaBusy ? "正在读取 Codex 额度…" : (snapshot.lines.first ?? "当前账户未提供周额度"))
             : Quota.countdown(snapshot.resetsAt)
-        _ = label(quotaDetail, 10, height - 109, 320, 12, .secondaryLabelColor)
-        var nextY = height - 133
-        if let credits = snapshot.resetCredits {
-            _ = label("可用重置  \(credits) 次", 10, nextY, 320, 12)
-            nextY -= 24
-        }
-        if snapshot.ordinaryUsageAllowed == false {
-            _ = label("常规额度暂不可用", 10, nextY, 320, 12, .secondaryLabelColor)
-        }
+        var details = [quotaDetail]
+        if let credits=snapshot.resetCredits { details.append("可用重置 \(credits) 次") }
+        if snapshot.ordinaryUsageAllowed == false { details.insert("常规额度暂不可用",at:0) }
+        let detail = label(details.joined(separator:" · "),16,54,276,10,.aidockSecondary)
+        detail.lineBreakMode = .byTruncatingTail
+        detail.toolTip = details.joined(separator:"\n")
+        detail.setAccessibilityLabel(details.joined(separator:"；"))
         let targets: [(String, Bool, Int?, Bool)] = [("ChatGPT", checked, latency, probeBusy), ("Google", googleChecked, googleLatency, googleBusy)]
         for (index, target) in targets.enumerated() {
-            let x = CGFloat(10 + index * 166)
+            let x = CGFloat(6 + index * 152)
             let current = ProbeState.state(checked: target.1, latency: target.2, threshold: threshold)
-            _ = label(target.0, x, 34, 148, 11, .secondaryLabelColor, .medium)
-            let swatch = NSView(frame: NSRect(x: x, y: 23, width: 7, height: 14))
+            _ = label(target.0, x, 24, 144, 11, .aidockSecondary, .medium)
+            let swatch = NSView(frame: NSRect(x: x + 3, y: 19, width: 7, height: 14))
             swatch.wantsLayer = true
             swatch.layer?.cornerRadius = 3.5
             swatch.layer?.backgroundColor = (current == .slow ? NSColor.systemOrange : current.color).cgColor
             view.addSubview(swatch)
             let value = target.3 ? "检测中…" : !target.1 ? "等待检测" : target.2.map { "\($0) ms · \($0 > threshold ? "偏慢" : "正常")" } ?? "— · 未连通"
-            let result = label(value, x + 15, 13, 133, 12)
+            let result = label(value, x + 15, 9, 129, 12)
             result.toolTip = "独立 HTTPS 请求耗时，沿系统网络和当前代理规则访问；不同域名可能走不同路由。可达不代表 VPN 已连接或 Codex 会话正常。"
         }
 
@@ -499,24 +482,24 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         for (index, action) in actions.enumerated() {
             if index == 0 {
                 refreshGlyph.target = self; refreshGlyph.action = action.2
-                refreshGlyph.frame = NSRect(x:226,y:Int(height)-48,width:32,height:32)
+                refreshGlyph.frame = NSRect(x:206,y:Int(height)-44,width:32,height:32)
                 let phase: RefreshGlyphButton.Phase = manualRefresh ? .running : refreshFinished != nil ? (refreshHadFailure ? .failure : .success) : .idle
                 refreshGlyph.update(phase)
                 view.addSubview(refreshGlyph)
                 continue
             }
             let button = NSButton(image:NSImage(systemSymbolName:action.0,accessibilityDescription:action.1)!,target:self,action:action.2)
-            button.isBordered = false; button.contentTintColor = .secondaryLabelColor
+            button.isBordered = false; button.contentTintColor = .aidockSecondary
             button.image = button.image?.withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize:14,weight:.regular))
             button.imagePosition = .imageOnly; button.imageScaling = .scaleNone
-            button.frame = NSRect(x:226+index*36,y:Int(height)-48,width:32,height:32)
+            button.frame = NSRect(x:206+index*32,y:Int(height)-44,width:32,height:32)
             button.toolTip = action.1; button.setAccessibilityLabel(action.1)
             view.addSubview(button)
         }
         return view
     }
     func launcherView() -> NSView {
-        let view = NSView(frame: NSRect(x: 0, y: 0, width: 340, height: 60))
+        let view = NSView(frame: NSRect(x: 0, y: 0, width: 308, height: 52))
         let entries: [(String, String, Selector)] = [
             ("打开 Codex", "terminal", #selector(openCodex)),
             ("打开 Clash", "lock.shield", #selector(openClash))
@@ -538,7 +521,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
             button.imagePosition = .imageLeading
             button.imageScaling = .scaleProportionallyDown
-            button.frame = NSRect(x: 10 + index * 166, y: 12, width: 154, height: 44)
+            button.frame = NSRect(x: 6 + index * 152, y: 6, width: 144, height: 40)
             button.setAccessibilityLabel(entry.0)
             view.addSubview(button)
         }
@@ -607,22 +590,17 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 }
 if CommandLine.arguments.contains("--self-test") {
-    var arrowElements = [CGPathElementType](), checkElements = [CGPathElementType]()
-    RefreshGlyphButton.path(check:false).applyWithBlock { arrowElements.append($0.pointee.type) }
-    RefreshGlyphButton.path(check:true).applyWithBlock { checkElements.append($0.pointee.type) }
-    precondition(arrowElements == checkElements && arrowElements.count == 49)
-    RefreshGlyphButton.path(check:false).applyWithBlock { element in
-        let point=element.pointee.points[0]
-        precondition(abs(hypot(point.x-16,point.y-16)-RefreshGlyphButton.radius)<0.0001)
-    }
-    for angle in stride(from:0.0,to:2*Double.pi,by:Double.pi/24) {
-        let x=cos(angle)*Double(RefreshGlyphButton.radius), y=sin(angle)*Double(RefreshGlyphButton.radius)
-        precondition(abs(hypot(x,y)-Double(RefreshGlyphButton.radius))<0.0001)
-    }
     let _ = NSApplication.shared
     let fixture = App()
     let settings = fixture.settingsView()
     precondition(settings.subviews.allSatisfy { settings.bounds.contains($0.frame) })
+    precondition(settings.frame.size == NSSize(width:320,height:222))
+    precondition(fixture.dashboardView(state:.normal).frame.height+56 == settings.frame.height)
+    fixture.snapshot.resetCredits=2;fixture.snapshot.ordinaryUsageAllowed=false
+    precondition(fixture.dashboardView(state:.normal).frame.height+56 == settings.frame.height)
+    fixture.settingsOpen=true
+    fixture.popoverDidClose(Notification(name:NSPopover.didCloseNotification))
+    precondition(!fixture.settingsOpen)
     fixture.refreshGlyph.update(.running)
     precondition(!fixture.refreshGlyph.isEnabled && fixture.refreshGlyph.hasFixedRotationCenter())
     fixture.refreshGlyph.frame.origin = NSPoint(x:220,y:118)
@@ -631,8 +609,8 @@ if CommandLine.arguments.contains("--self-test") {
     fixture.refreshGlyph.update(.success)
     precondition(fixture.refreshGlyph.isEnabled && fixture.refreshGlyph.toolTip == "刷新完成")
     fixture.refreshGlyph.update(.failure)
-    precondition(fixture.refreshGlyph.image != nil && fixture.refreshGlyph.toolTip!.contains("部分数据"))
-    print("PASS: compatible morph paths, contained settings controls, refresh running/success/failure states")
+    precondition(fixture.refreshGlyph.toolTip!.contains("部分数据"))
+    print("PASS: native symbols, contained settings controls, refresh running/success/failure states")
     for target in ProbeTarget.allCases {
         precondition(target.accepts(HTTPURLResponse(url: target.url, statusCode: target.expectedStatus, httpVersion: nil, headerFields: nil)!))
         precondition(!target.accepts(HTTPURLResponse(url: target.url, statusCode: 403, httpVersion: nil, headerFields: nil)!))
@@ -686,9 +664,9 @@ if CommandLine.arguments.contains("--self-test") {
     precondition(persistentProbeFailure([false, true, true]))
     precondition(!persistentProbeFailure([true, true, false]))
     precondition(LampStyle.resolve(state: .unknown, monochrome: true, persistentFailure: false) == .hollow)
-    precondition(LampStyle.resolve(state: .normal, monochrome: true, persistentFailure: true) == .neutral)
-    precondition(LampStyle.resolve(state: .slow, monochrome: true, persistentFailure: true) == .neutral)
-    precondition(LampStyle.resolve(state: .failed, monochrome: true, persistentFailure: false) == .neutral)
+    precondition(LampStyle.resolve(state: .normal, monochrome: true, persistentFailure: true) == .white)
+    precondition(LampStyle.resolve(state: .slow, monochrome: true, persistentFailure: true) == .white)
+    precondition(LampStyle.resolve(state: .failed, monochrome: true, persistentFailure: false) == .white)
     precondition(LampStyle.resolve(state: .failed, monochrome: true, persistentFailure: true) == .red)
     precondition(LampStyle.resolve(state: .failed, monochrome: false, persistentFailure: false) == .red)
     print("PASS: optional monochrome lamp, hollow unknown, consecutive failure gate and recovery")

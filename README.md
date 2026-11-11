@@ -16,6 +16,10 @@
 
 ![单路探测不可用示例](docs/images/unavailable.png)
 
+| 深色面板 | 深色设置 |
+| --- | --- |
+| ![深色面板](docs/images/panel-dark.png) | ![深色设置](docs/images/settings-dark.png) |
+
 ## 能耗与稳定性
 
 检测不是零成本：当前理论上每小时 240 次 HTTPS 探测、12 次额度 CLI 启动。一次空闲采样约 57 MiB 内存、0.0% CPU，未发现 AI Dock 防休眠断言；这不是续航测量，也不保证所有环境无冲突。[性能与能耗调研](PERFORMANCE.md)列出连接复用、减少隐藏界面重绘、自适应频率、睡眠恢复和子进程回收方案及验证计划，尚未实施这些优化。
@@ -26,7 +30,7 @@
 
 - **额度弧**：270° 轨道表示 Codex 周额度剩余；底部留缺口；额度未知使用虚线。
 - **状态点**：显示 ChatGPT 独立探测状态，支持单色模式。它不证明 Codex 会话健康或代理已连接。
-- **面板**：Codex 周额度及重置倒计时；横向的 ChatGPT / Google 检测结果；固定的 Codex、Clash Verge 启动按钮。
+- **面板**：Codex 标题、右侧剩余百分比和进度条，下方显示重置倒计时；横向的 ChatGPT / Google 检测结果；固定的 Codex、Clash Verge 启动按钮。
 - **操作**：刷新显示进行动画，成功后短暂显示勾选，部分失败显示提示标识；设置和退出位于右上角。
 
 ## 数据与隐私边界
@@ -56,7 +60,7 @@
 
 ## 构建与验证
 
-源码：`Sources/main.swift`；资源：`Resources/`；本机 CLI 生成的接口参考：`Protocol/`。
+源码：`Sources/main.swift`；资源：`Resources/`。本机 CLI 接口参考 `Protocol/` 仅留在开发环境，不纳入仓库。
 
 需要 macOS 和 Apple Command Line Tools：
 
