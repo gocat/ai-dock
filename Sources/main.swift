@@ -235,7 +235,7 @@ final class RefreshGlyphButton: NSButton {
                 if t < 0.38 { let u = t / 0.38; point = CGPoint(x: a.x + (b.x-a.x)*u, y: a.y + (b.y-a.y)*u) }
                 else { let u = (t-0.38)/0.62; point = CGPoint(x: b.x+(c.x-b.x)*u, y:b.y+(c.y-b.y)*u) }
             } else {
-                let angle = CGFloat.pi / 3 - t * 5 * CGFloat.pi / 3
+                let angle = CGFloat.pi / 4 + t * 3 * CGFloat.pi / 2
                 point = CGPoint(x: 16 + cos(angle)*8, y:16 + sin(angle)*8)
             }
             if i == 0 { p.move(to:point) } else { p.addLine(to:point) }
@@ -245,17 +245,21 @@ final class RefreshGlyphButton: NSButton {
     override init(frame frameRect: NSRect) {
         super.init(frame:frameRect)
         title = ""; isBordered = false; wantsLayer = true
-        ink.bounds = CGRect(x:0,y:0,width:32,height:32); ink.position = CGPoint(x:16,y:17)
+        image = NSImage(systemSymbolName:"arrow.clockwise",accessibilityDescription:nil)?.withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize:14,weight:.regular))
+        contentTintColor = .secondaryLabelColor
+        imagePosition = .imageOnly; imageScaling = .scaleNone
+        ink.isHidden = true
+        ink.bounds = CGRect(x:0,y:0,width:32,height:32); ink.position = CGPoint(x:16,y:16)
         ink.isGeometryFlipped = false
         layer?.addSublayer(ink)
         for line in [stroke,head] {
-            line.fillColor = nil; line.lineWidth = 1.8; line.lineCap = .round; line.lineJoin = .round
+            line.fillColor = nil; line.lineWidth = 1.5; line.lineCap = .round; line.lineJoin = .round
             ink.addSublayer(line)
         }
         stroke.path = Self.path(check:false)
-        let angle = -4 * CGFloat.pi / 3
+        let angle = 7 * CGFloat.pi / 4
         let tip = CGPoint(x:16+cos(angle)*8,y:16+sin(angle)*8)
-        let tangent = CGPoint(x:sin(angle),y:-cos(angle))
+        let tangent = CGPoint(x:-sin(angle),y:cos(angle))
         let wing = CGMutablePath()
         wing.move(to:CGPoint(x:tip.x-tangent.x*4-tangent.y*3,y:tip.y-tangent.y*4+tangent.x*3))
         wing.addLine(to:tip)
@@ -295,13 +299,14 @@ final class RefreshGlyphButton: NSButton {
             fade.toValue = head.opacity; fade.duration = 0.25; head.add(fade,forKey:"fade")
             if next == .running {
                 let rotate = CABasicAnimation(keyPath:"transform.rotation.z")
-                rotate.fromValue = 0; rotate.toValue = -2 * Double.pi
+                rotate.fromValue = 0; rotate.toValue = 2 * Double.pi
                 rotate.duration = 0.95; rotate.repeatCount = .infinity
                 ink.add(rotate,forKey:"rotation")
             }
         }
         // Partial failure never morphs to a success checkmark.
         if next == .failure { image = NSImage(systemSymbolName:"exclamationmark.circle",accessibilityDescription:nil); ink.isHidden = true }
+        else if next == .idle { image = NSImage(systemSymbolName:"arrow.clockwise",accessibilityDescription:nil)?.withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize:14,weight:.regular)); ink.isHidden = true }
         else { image = nil; ink.isHidden = false }
         phase = next
     }
@@ -484,6 +489,8 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
             let button = NSButton(image:NSImage(systemSymbolName:action.0,accessibilityDescription:action.1)!,target:self,action:action.2)
             button.isBordered = false; button.contentTintColor = .secondaryLabelColor
+            button.image = button.image?.withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize:14,weight:.regular))
+            button.imagePosition = .imageOnly; button.imageScaling = .scaleNone
             button.frame = NSRect(x:220+index*36,y:Int(height)-36,width:32,height:32)
             button.toolTip = action.1; button.setAccessibilityLabel(action.1)
             view.addSubview(button)
