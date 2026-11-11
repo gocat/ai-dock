@@ -4,6 +4,8 @@
 
 A native macOS menu bar utility for **Codex weekly quota, independent ChatGPT / Google connectivity checks, quick launchers, and quiet failure reminders**.
 
+**Outer arc for quota. Center dot for connectivity.** A glance at the menu bar shows your remaining Codex weekly quota and the independent ChatGPT connectivity result, without opening the panel. Inspired by **iPhone duo**, the design packs the most useful information into one small icon.
+
 ## Quick install
 
 ### Ask your AI assistant
@@ -27,6 +29,8 @@ Quota reads currently use the Codex CLI inside `/Applications/ChatGPT.app` and i
 **Why no DMG yet?** Honestly, I don't want to pay Apple's developer membership fee for this little utility right now. Making a DMG is free; developer signing and notarization are what make distribution smoother. For now, asking your AI assistant or pasting one command to build locally is convenient enough. A chat-only AI cannot install it for you, but can guide you.
 
 ![AI Dock showcase](docs/images/showcase-dark-en.jpg)
+
+The outer-arc examples show 100%, 50%, and 0% remaining quota. Green, amber, and red center dots mean OK, slow, and unreachable. Zero quota does not mean a network failure; unknown quota uses a dashed arc. Examples show color mode, and connectivity does not establish VPN or Codex session health.
 
 Supports light and dark appearances. This AI-assisted showcase uses sample data and includes redrawn visual details. Application brand marks identify the launch targets; the default source build uses neutral system symbols. The showcase predates the language selector.
 
