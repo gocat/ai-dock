@@ -256,12 +256,13 @@ final class RefreshGlyphButton: NSButton {
         stroke.path=Self.path(check:false)
         let angle=7*CGFloat.pi/4
         let tip=CGPoint(x:16+cos(angle)*Self.radius,y:16+sin(angle)*Self.radius)
-        // Arrowhead wings share the clockwise tangent, independently of its bounds.
-        let tangent=CGPoint(x:-sin(angle),y:cos(angle))
+        // Exact horizontal/vertical wings: symmetric 90-degree arrowhead.
+        // Its bisector matches the circle tangent at the upper-right endpoint.
         let wing=CGMutablePath()
-        wing.move(to:CGPoint(x:tip.x-tangent.x*3-tangent.y*2.5,y:tip.y-tangent.y*3+tangent.x*2.5))
+        let length:CGFloat = 4.2
+        wing.move(to:CGPoint(x:tip.x-length,y:tip.y))
         wing.addLine(to:tip)
-        wing.addLine(to:CGPoint(x:tip.x-tangent.x*3+tangent.y*2.5,y:tip.y-tangent.y*3-tangent.x*2.5))
+        wing.addLine(to:CGPoint(x:tip.x,y:tip.y-length))
         head.path=wing
         update(.idle)
     }
