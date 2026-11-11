@@ -222,6 +222,7 @@ func probeLabel(_ name: String, checked: Bool, latency: Int?, threshold: Int) ->
 final class RefreshGlyphButton: NSButton {
     enum Phase { case idle, running, success, failure }
     private let ink = CALayer()
+    private let symbol = CALayer()
     private let stroke = CAShapeLayer()
     private let head = CAShapeLayer()
     private var phase: Phase = .idle
@@ -252,6 +253,12 @@ final class RefreshGlyphButton: NSButton {
         ink.bounds = CGRect(x:0,y:0,width:32,height:32); ink.position = CGPoint(x:16,y:16)
         ink.isGeometryFlipped = false
         layer?.addSublayer(ink)
+        symbol.bounds = CGRect(x:0,y:0,width:32,height:32)
+        symbol.anchorPoint = CGPoint(x:0.5,y:0.5)
+        symbol.position = CGPoint(x:16,y:16)
+        layer?.addSublayer(symbol)
+        updateSymbol()
+        image = nil
         for line in [stroke,head] {
             line.fillColor = nil; line.lineWidth = 1.5; line.lineCap = .round; line.lineJoin = .round
             ink.addSublayer(line)
@@ -266,12 +273,30 @@ final class RefreshGlyphButton: NSButton {
         wing.addLine(to:CGPoint(x:tip.x-tangent.x*4+tangent.y*3,y:tip.y-tangent.y*4-tangent.x*3))
         head.path = wing
     }
+    private func updateSymbol() {
+        let glyph = NSImage(systemSymbolName:"arrow.clockwise",accessibilityDescription:nil)!.withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize:14,weight:.regular))!
+        let canvas = NSImage(size:NSSize(width:32,height:32),flipped:false) { _ in
+            glyph.draw(in:NSRect(x:(32-glyph.size.width)/2,y:(32-glyph.size.height)/2,width:glyph.size.width,height:glyph.size.height))
+            let cg = NSGraphicsContext.current!.cgContext
+            cg.setBlendMode(.sourceIn)
+            cg.setFillColor(NSColor(calibratedWhite:0.52,alpha:1).cgColor)
+            cg.fill(CGRect(x:0,y:0,width:32,height:32))
+            return true
+        }
+        var rect=CGRect(x:0,y:0,width:32,height:32)
+        symbol.contents = canvas.cgImage(forProposedRect:&rect,context:nil,hints:nil)
+        symbol.contentsScale = 2
+    }
+    func hasFixedRotationCenter() -> Bool {
+        symbol.position == CGPoint(x:16,y:16) && symbol.anchorPoint == CGPoint(x:0.5,y:0.5) && symbol.bounds == CGRect(x:0,y:0,width:32,height:32) && CATransform3DIsIdentity(layer!.transform) && layer?.animation(forKey:"symbolRotation") == nil
+    }
     required init?(coder:NSCoder) { fatalError("init(coder:) is unsupported") }
     func update(_ next: Phase) {
         let color = next == .failure ? NSColor.systemOrange : NSColor.secondaryLabelColor
         CATransaction.begin(); CATransaction.setDisableActions(true)
         stroke.strokeColor = color.cgColor; head.strokeColor = color.cgColor
         CATransaction.commit()
+        updateSymbol()
         isEnabled = next != .running
         let description = next == .running ? "正在刷新" : next == .success ? "刷新完成" : next == .failure ? "刷新完成，部分数据未获取" : "刷新额度与连接状态"
         toolTip = description; setAccessibilityLabel(description)
@@ -279,17 +304,18 @@ final class RefreshGlyphButton: NSButton {
         let reduce = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         // Rotate the same SF Symbol used at rest, around the fixed button center.
         // Never substitute the hand-drawn morph path while spinning.
-        let rotation = layer?.presentation()?.transform ?? CATransform3DIdentity
-        layer?.removeAnimation(forKey:"symbolRotation")
+        let rotation = symbol.presentation()?.transform ?? CATransform3DIdentity
+        symbol.removeAnimation(forKey:"symbolRotation")
         if next == .running {
             image = NSImage(systemSymbolName:"arrow.clockwise",accessibilityDescription:nil)?.withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize:14,weight:.regular))
+            image = nil; symbol.isHidden = false
             ink.isHidden = true
             if !reduce {
                 let spin = CABasicAnimation(keyPath:"transform.rotation.z")
                 spin.fromValue = 0; spin.toValue = 2 * Double.pi
                 spin.duration = 1.1; spin.repeatCount = .infinity
                 spin.timingFunction = CAMediaTimingFunction(name:.linear)
-                layer?.add(spin,forKey:"symbolRotation")
+                symbol.add(spin,forKey:"symbolRotation")
             }
             phase = next
             return
@@ -300,8 +326,9 @@ final class RefreshGlyphButton: NSButton {
             settle.toValue = NSValue(caTransform3D:CATransform3DIdentity)
             settle.duration = 0.35
             settle.timingFunction = CAMediaTimingFunction(controlPoints:0.16,1,0.3,1)
-            layer?.add(settle,forKey:"symbolSettle")
+            symbol.add(settle,forKey:"symbolSettle")
         }
+        symbol.isHidden = next != .idle
         let oldPath = stroke.presentation()?.path ?? stroke.path
         let oldTransform = ink.presentation()?.transform ?? ink.transform
         ink.removeAnimation(forKey:"rotation")
@@ -325,7 +352,7 @@ final class RefreshGlyphButton: NSButton {
         }
         // Partial failure never morphs to a success checkmark.
         if next == .failure { image = NSImage(systemSymbolName:"exclamationmark.circle",accessibilityDescription:nil); ink.isHidden = true }
-        else if next == .idle { image = NSImage(systemSymbolName:"arrow.clockwise",accessibilityDescription:nil)?.withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize:14,weight:.regular)); ink.isHidden = true }
+        else if next == .idle { image = nil; ink.isHidden = true }
         else { image = nil; ink.isHidden = false }
         phase = next
     }
@@ -464,7 +491,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return field
         }
         _ = label("AI Dock", 16, height - 38, 198, 10, .secondaryLabelColor)
-        _ = label(weeklyRemaining.map { "周额度剩余  \(Int(($0 * 100).rounded()))%" } ?? "周额度暂不可用", 16, height - 65, 308, 21, .labelColor, .semibold)
+        _ = label(weeklyRemaining.map { "本周剩余  \(Int(($0 * 100).rounded()))%" } ?? "周额度暂不可用", 16, height - 65, 308, 21, .labelColor, .semibold)
         let quotaDetail = weeklyRemaining == nil
             ? (quotaBusy ? "正在读取 Codex 额度…" : (snapshot.lines.first ?? "当前账户未提供周额度"))
             : Quota.countdown(snapshot.resetsAt)
@@ -617,7 +644,10 @@ if CommandLine.arguments.contains("--self-test") {
     let settings = fixture.settingsView()
     precondition(settings.subviews.allSatisfy { settings.bounds.contains($0.frame) })
     fixture.refreshGlyph.update(.running)
-    precondition(!fixture.refreshGlyph.isEnabled && fixture.refreshGlyph.image != nil)
+    precondition(!fixture.refreshGlyph.isEnabled && fixture.refreshGlyph.hasFixedRotationCenter())
+    fixture.refreshGlyph.frame.origin = NSPoint(x:220,y:118)
+    fixture.refreshGlyph.update(.running)
+    precondition(fixture.refreshGlyph.hasFixedRotationCenter())
     fixture.refreshGlyph.update(.success)
     precondition(fixture.refreshGlyph.isEnabled && fixture.refreshGlyph.toolTip == "刷新完成")
     fixture.refreshGlyph.update(.failure)

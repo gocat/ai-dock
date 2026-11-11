@@ -24,3 +24,5 @@ Do not describe the candidate as publicly released or fully cross-platform teste
 
 - Refresh follow-up: corrected checkmark orientation for AppKit layer coordinates, shifted glyph optical center and added cubic easing (0.55-second morph / 0.40-second settle). Native success-state render verified; subjective live motion remains for owner review.
 - README images use synthetic values rendered from actual native view code; no live account screenshots uploaded. Energy review is in PERFORMANCE.md; only one process snapshot measured.
+
+- Follow-up: rotate only an explicitly centered child symbol layer, never the AppKit-owned button layer. Verified native views at 0/90/180/270 degrees and fixed-center assertions after button relocation. Quota heading now reads 本周剩余.
