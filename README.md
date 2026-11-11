@@ -6,6 +6,12 @@
 
 [产品定位与路线图](PRODUCT.md)记录已实现、正在收敛、待验证和远期探索，是后续产品评审与公开说明的依据。多 AI、多账号和通用额度中心目前都不是已交付能力。
 
+## 展示
+
+![AI Dock 深色展示](docs/images/showcase-dark.jpg)
+
+上图为 AI 辅助美化展示图，使用示例数据；字体、图标和材质细节有重绘。展示中的应用品牌图标仅用于识别，本仓库默认构建使用中性系统图标，不打包这些品牌资源。真实代码生成的界面预览见下方。
+
 ## 界面预览
 
 以下是当前原生视图代码生成的界面截图，使用固定示例数据，不含真实账户额度；系统弹出层阴影未包含，启动按钮使用审阅版中性图标。
@@ -79,13 +85,12 @@ bash build.sh
 
 已验证：构建、自测、签名；原设置迁移和单实例；Finder 启动、退出确认、重新打开；设置、刷新进行与完成反馈；关键额度异常的界面分支。真实未登录/登录过期、完整深浅色矩阵、睡眠唤醒及长期网络波动仍待验证，详见[路线图](PRODUCT.md)。
 
-## 发布状态
+## 开源与分发
 
-源码与进度已同步至私有仓库 gocat/ai-dock。待产品满意后再决定开源，不自动公开发布。品牌资源及公开分发许可仍需核实，尤其是当前 Codex 本地单色适配稿。本项目不改变其他项目或仓库的可见性。
+项目代码采用 [MIT 许可证](LICENSE)，版权署名为 gocat。第三方品牌、商标及系统图标不因本项目的 MIT 许可获得额外授权，参见 [资源说明](THIRD_PARTY.md)。
 
+本次开源以源码及构建说明为主。应用尚未完成 Developer ID 签名和公证，不提供已公证安装包。当前默认构建使用中性系统图标；本地定制版本的品牌按钮图标不包含在源码或默认构建中。
 
-## 发布候选审阅
+`bash build.sh` 生成 AI Dock 应用，`bash scripts/review-package.sh` 生成本地应用 ZIP、白名单源码 ZIP 和校验和。要求 macOS 14+、Apple Command Line Tools 与 Python 3；目前仅在当前 Apple silicon Mac 实测，不声称跨系统逐字节可复现。
 
-[发布审阅清单](RELEASE_REVIEW.md)与[拟发布说明](RELEASE_NOTES.md)已准备，私有仓库已确认；公开分发的许可证与版本尚未确认。
-
-默认 `bash build.sh` 使用中性系统图标，并重新生成 AI Dock 自有应用图标；不打包开发阶段的第三方品牌资源，详见[资源说明](THIRD_PARTY.md)。`bash scripts/review-package.sh` 生成本地候选应用 ZIP、白名单源码 ZIP 和校验和。当前构建要求 macOS 14+、当前 Apple Command Line Tools 与 Python 3；目前仅在当前 Apple silicon Mac 实测，并未声称跨系统逐字节可复现。
+[版本说明](RELEASE_NOTES.md) · [验证记录](VALIDATION.md) · [发布检查](RELEASE_REVIEW.md)

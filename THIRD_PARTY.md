@@ -18,4 +18,4 @@ References:
 - [Clash Verge Rev license](https://github.com/clash-verge-rev/clash-verge-rev/blob/main/LICENSE)
 - [Apple SF Symbols](https://developer.apple.com/sf-symbols/)
 
-The project license is pending owner confirmation. Excluding third-party artwork does not itself grant a license to this project's source.
+The project's original code is licensed under MIT, Copyright (c) 2026 gocat. Third-party trademarks and artwork are not licensed by this project's MIT license. The AI-assisted showcase image depicts application identifiers for illustrative recognition only; it is not a source of redistributable brand assets and differs from the neutral icons in the default build.

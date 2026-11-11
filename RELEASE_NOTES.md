@@ -1,4 +1,4 @@
-# AI Dock — proposed v0.1.0-rc.1
+# AI Dock — 0.1.0 source snapshot
 
 A small macOS menu-bar companion for Codex quota and independent connectivity checks.
 
@@ -18,7 +18,7 @@ A small macOS menu-bar companion for Codex quota and independent connectivity ch
 - The current app ZIP is Apple silicon, locally ad-hoc signed, not notarized. Gatekeeper handling on a freshly downloaded Mac has not been tested; no security-bypass instructions are supplied.
 - Real logged-out/expired-login, long-running sleep/wake and complete OS/appearance coverage remain pending.
 
-Private repository gocat/ai-dock is confirmed; license and public release version are not final. This is a review draft, not a published release.
+Source license: MIT, Copyright (c) 2026 gocat. Source publication is authorized; no notarized binary is provided.
 
 ## 2026-11-11 development snapshot
 
@@ -30,7 +30,7 @@ Private repository gocat/ai-dock is confirmed; license and public release versio
 - Selected black application icon, silver ring, mint point and optical centering.
 - Build/self-tests and ad-hoc signature checks passed; runtime and distribution limits remain in VALIDATION.md.
 - P1 pool: investigate WorkBuddy and Doubao Work subscription usage integration; no integration claimed.
-- Private repository synchronization authorized; no public release or license selection implied.
+- Historical snapshot was private at that point; see the subsequent open-source update below.
 
 ## 2026-11-11 final private snapshot (local build 20)
 
@@ -40,3 +40,9 @@ Private repository gocat/ai-dock is confirmed; license and public release versio
 - Native small settings switches; clear slow-status threshold wording; balanced network/button spacing.
 - Updated synthetic-data light/dark previews and validation record.
 - End-of-day synchronization requested by the user; repository stays private, no release published.
+
+## Open-source preparation
+
+- MIT license confirmed, copyright gocat.
+- Selected dark showcase added with illustration disclosure; original rendered UI previews retained.
+- Source-first distribution; no notarized app package or third-party brand assets bundled.
