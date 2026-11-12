@@ -1,0 +1,22 @@
+{
+  "angularDeltaInUnflippedRootRadians": -11.795816887640157,
+  "backingLayerIsFlipped": true,
+  "buttonIsFlipped": true,
+  "clockwise": true,
+  "drawingScale": 2,
+  "failureStopped": true,
+  "fixedIconsStopped": true,
+  "idleStopped": true,
+  "maxCenterDriftPt": 6.355287432313019e-14,
+  "maxFrameStepRadians": 0.12940886506672022,
+  "maxPhaseTimingErrorRadians": 0.024425882566444956,
+  "maxRadiusErrorPt": 4.529709940470639e-14,
+  "missingPresentationSamples": 0,
+  "passed": true,
+  "rasterChecks": 20,
+  "rastersValid": true,
+  "reduceMotion": false,
+  "reparentStepRadians": 0.12940886506672022,
+  "samples": 125,
+  "successStopped": true
+}

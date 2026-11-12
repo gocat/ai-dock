@@ -2,7 +2,7 @@ from pathlib import Path
 import zipfile,hashlib,json
 root=Path(__file__).resolve().parent.parent
 files=['.gitignore','README.md','README.en.md','PRODUCT.md','THIRD_PARTY.md','RELEASE_REVIEW.md','RELEASE_NOTES.md','VALIDATION.md','build.sh','install.sh',
-       'Sources/main.swift','Sources/Localization.swift','Resources/GenerateIcon.swift','Resources/GenerateStateGIF.swift','scripts/generate-icon.sh','scripts/review-package.sh','scripts/source-package.py']
+       'Sources/main.swift','Sources/Localization.swift','Resources/GenerateIcon.swift','Resources/GenerateStateGIF.swift','Resources/Showcase.swift','scripts/generate-showcase.py','scripts/generate-icon.sh','scripts/review-package.sh','scripts/source-package.py','scripts/validate-toolbar.py','docs/validation/toolbar-build-27.json','docs/validation/toolbar-build-29.json']
 files += ['docs/images/showcase-dark.jpg','docs/images/showcase-dark-en.jpg','docs/images/icon-states-zh.gif','docs/images/icon-states-en.gif','PERFORMANCE.md'] + ['docs/images/'+name+'.png' for name in ['app-icon','panel','settings','unavailable','refresh-success','panel-dark','settings-dark','unavailable-dark','refresh-success-dark']]
 if (root/'LICENSE').is_file():files.append('LICENSE')
 records=[]

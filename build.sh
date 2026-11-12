@@ -23,7 +23,7 @@ import plistlib,sys
 info={'CFBundleExecutable':'CodexCompanion','CFBundleIdentifier':sys.argv[2],
       'CFBundleName':'AI Dock','CFBundleDisplayName':'AI Dock','CFBundleIconFile':'Companion',
       'CFBundlePackageType':'APPL','LSApplicationCategoryType':'public.app-category.utilities',
-      'CFBundleVersion':'5','CFBundleShortVersionString':'0.1.0','LSMinimumSystemVersion':'14.0',
+      'CFBundleVersion':'29','CFBundleShortVersionString':'1.0.0-rc.8','LSMinimumSystemVersion':'14.0',
       'LSUIElement':True,'NSHighResolutionCapable':True}
 with open(sys.argv[1],'wb') as f:plistlib.dump(info,f)
 PY

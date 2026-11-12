@@ -2,11 +2,15 @@ import AppKit
 import ImageIO
 import UniformTypeIdentifiers
 let _ = NSApplication.shared
-struct Frame { let quota:Double; let state:Int; let delay:Double }
-var frames=[Frame(quota:1,state:0,delay:1.2)]
-for i in 1...5 { frames.append(Frame(quota:1-Double(i)/10,state:0,delay:i == 5 ? 1.2 : 0.08)) }
-for i in 1...5 { frames.append(Frame(quota:0.5-Double(i)/10,state:0,delay:i == 5 ? 1.4 : 0.08)) }
-frames += [Frame(quota:1,state:0,delay:1.2),Frame(quota:1,state:1,delay:1.5),Frame(quota:1,state:2,delay:1.5)]
+struct Frame { let quota:Double; let state:Int; let previous:Int; let blend:Double; let delay:Double }
+func ease(_ t:Double)->Double { t*t*(3-2*t) }
+var frames=[Frame(quota:1,state:0,previous:0,blend:1,delay:1.2)]
+for (start,end) in [(1.0,0.5),(0.5,0.0),(0.0,1.0)] {
+ for i in 1...14 { let t=ease(Double(i)/14);frames.append(Frame(quota:start+(end-start)*t,state:0,previous:0,blend:1,delay:i == 14 ? 1.2 : 0.04)) }
+}
+for (previous,state) in [(0,1),(1,2),(2,0)] {
+ for i in 1...12 { frames.append(Frame(quota:1,state:state,previous:previous,blend:ease(Double(i)/12),delay:i == 12 ? 1.4 : 0.04)) }
+}
 let width=720,height=230
 let outputDirectory=CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : "docs/images"
 try! FileManager.default.createDirectory(atPath:outputDirectory,withIntermediateDirectories:true)
@@ -24,7 +28,9 @@ func render(_ f:Frame,english:Bool)->CGImage {
   let base=NSBezierPath();base.appendArc(withCenter:NSPoint(x:x,y:128),radius:29,startAngle:225,endAngle:-45,clockwise:true);base.lineWidth=5;base.lineCapStyle = .round
   NSColor(calibratedWhite:0.30,alpha:1).setStroke();base.stroke()
   if remaining > 0 {let arc=NSBezierPath();arc.appendArc(withCenter:NSPoint(x:x,y:128),radius:29,startAngle:225,endAngle:225-CGFloat(remaining*270),clockwise:true);arc.lineWidth=5;arc.lineCapStyle = .round;NSColor.white.setStroke();arc.stroke()}
-  [NSColor(calibratedRed:0.12,green:0.85,blue:0.43,alpha:1),NSColor(calibratedRed:1,green:0.74,blue:0.05,alpha:1),NSColor(calibratedRed:1,green:0.23,blue:0.23,alpha:1)][state].setFill()
+  let colors=[NSColor(calibratedRed:0.12,green:0.85,blue:0.43,alpha:1),NSColor(calibratedRed:1,green:0.74,blue:0.05,alpha:1),NSColor(calibratedRed:1,green:0.23,blue:0.23,alpha:1)]
+  let color = x < 360 ? colors[0] : colors[f.previous].blended(withFraction:f.blend,of:colors[f.state])!
+  color.setFill()
   NSBezierPath(ovalIn:NSRect(x:x-7,y:121,width:14,height:14)).fill()
  }
  text(english ? "Outer arc · Weekly quota" : "外圈 · 本周剩余额度",center:180,y:194,size:17,weight:.semibold)
@@ -32,7 +38,9 @@ func render(_ f:Frame,english:Bool)->CGImage {
  icon(x:180,remaining:f.quota,state:0);icon(x:540,remaining:1,state:f.state)
  let percent=Int((f.quota*100).rounded())
  text(english ? "\(percent)% remaining" : "剩余 \(percent)%",center:180,y:65,size:17,weight:.medium)
- text((english ? ["OK","Slow","Unreachable"] : ["正常","偏慢","未连通"])[f.state],center:540,y:65,size:17,weight:.medium)
+ let states=english ? ["OK","Slow","Unreachable"] : ["正常","偏慢","未连通"]
+ if f.previous != f.state { text(states[f.previous],center:540,y:65,size:17,color:NSColor.white.withAlphaComponent(1-f.blend),weight:.medium) }
+ text(states[f.state],center:540,y:65,size:17,color:NSColor.white.withAlphaComponent(f.previous == f.state ? 1 : f.blend),weight:.medium)
  NSColor(calibratedWhite:0.28,alpha:1).setFill();NSRect(x:359,y:55,width:1,height:120).fill()
  text(english ? "Color mode · Independent HTTPS probe · Not VPN or session status" : "彩色模式示例 · 独立 HTTPS 探测，不代表 VPN 或会话状态",center:360,y:19,size:12,color:NSColor(calibratedWhite:0.78,alpha:1))
  NSGraphicsContext.restoreGraphicsState()

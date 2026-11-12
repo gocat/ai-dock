@@ -1,6 +1,17 @@
 # Release candidate validation
 
-Status: private development snapshot; no public release. Repository synchronization is authorized; distribution acceptance remains pending.
+Status: source repository is public. The local 1.0 candidate is not a final release; owner acceptance remains pending. Older entries below are historical and may describe superseded implementations.
+
+
+## 2026-11-12: 1.0 candidate, build 24
+
+Passed: review build, strict ad-hoc signature, existing quota/notification/bilingual bounds tests; new tests for an unresponsive local shell child (0.3-second deadline, cleanup under 1.5 seconds), missing CLI, invalid saved application choice without silent fallback, stopped rotation after completion, and exact Settings/Back hit-area equality. Install preflight and diff whitespace check passed.
+
+Actual macOS UI: entered settings and returned repeatedly; language label and same-size Chinese/English layouts inspected. Login registration switched on then off, system-derived state updated; final state off. Selected Calculator as a harmless launcher fixture, observed changed name and Calculator window, and verified the choice survived app restart/update. Restored Clash Verge and System language. Actual quota timeout appeared with an available idle refresh button; refresh running disabled the button, and navigation during refresh returned to a usable overview. No VPN or network settings changed. App picker initially interrupted by host disconnection; selection was subsequently completed after reconnecting.
+
+Found during UI QA: the large system push button still wrapped “Clash Verge” despite NSCell no-wrap flags. Build 24 explicitly fits visible titles to an 82 pt width, preserving full names in tooltips and accessibility labels. Final installed check is recorded below.
+
+Not yet verified: actual reboot/login launch, approval-required login state, moved/uninstalled app on a real user installation, prolonged sleep/wake, Intel, other macOS versions, exact frame pacing and subjective animation smoothness. No battery-life improvement claim. All checks apply to the current Mac; no final 1.0 tag or GitHub push this round.
 
 Completed on the current Apple silicon Mac:
 - Default brand-free build, existing self-tests and strict ad-hoc signature verification.
@@ -57,3 +68,37 @@ Do not describe the candidate as publicly released or fully cross-platform teste
 - Showcase state legend: color-mode quota examples 100%/50%/0% hold the green dot constant; connectivity examples hold the full arc constant and vary green/yellow/red. Compared the illustrated meanings against statusIcon/LampStyle. Unknown quota is described as dashed, distinct from zero; HTTPS probe boundaries retained. Chinese and English versions visually reviewed; no application behavior changed.
 
 - Lightweight state GIF: generated with AppKit/ImageIO from flat vector geometry matching the menu gauge (270° arc, bottom gap). 14 timed frames; Chinese 21,325 bytes, English 21,901 bytes; loop enabled, key quota and network states held for readability. Reviewed full/empty/slow/unreachable frames; main showcase reverted to the approved v5 composition, with this separate animated legend beneath. App behavior unchanged.
+
+Final installed build 24 UI check: launcher visibly reads “打开 Clash…” on one line with full accessibility name “打开 Clash Verge”; fresh manual refresh entered disabled/running and later returned to idle/enabled. Settings was dismissed using the popover Cancel action and reopening showed the overview. App remains running, System language and Clash Verge selection retained, login launch off. This confirms sampled UI states, not frame-by-frame smoothness. A physical outside-click/multiple-monitor test and real reboot remain untested.
+
+## Build 25 / 1.0.0-rc.4 follow-up
+
+Owner reported build 24 rotation escaped the button; earlier size-only assertion was insufficient. Rotation now applies to an owned CALayer child with explicit zero-origin 32 pt bounds, position (16,16), anchor (0.5,0.5); no AppKit view backing layer is transformed. The stronger geometry assertion passes. Actual UI screenshot sampled the arrow at a rotated angle within its toolbar position, followed by idle in the same position; no frame-pacing claim. Symbol rasterization uses effective appearance and refreshes when appearance changes; actual dark-system switching remains untested.
+
+Settings and Back now share the far-right hit target. Language and proxy controls are side by side, with compact switch rows beneath. Both Chinese and English settings were inspected in the real popover; fixed dimensions and text-fit tests pass. System language restored. Background result updates no longer rebuild existing settings controls; explicit user preference changes still rebuild them. Default build/self-tests and installed signature pass; no GitHub push or final 1.0 tag.
+
+## Build 26: arc-centered refresh
+
+Owner correctly distinguished the visible arc center from the SF Symbol image bounds. Refresh now draws a 270-degree arc of radius 6.5 pt at (16,16), with a tangent arrowhead; the layer pivot uses that same point. Positive z rotation replaces the previous negative rotation for the AppKit-hosted layer. Completion symbols remain native and crossfade; other UI is unchanged. Build/self-tests/signature pass. Actual UI inspected idle and running samples and observed return to idle; the cursor partly obscured the running sample, so continuous direction/frame-pacing verification is not claimed. App remains running for owner review. No push or final release.
+
+## Build 27: continuous toolbar regression
+
+Unified refresh, power, gear and Back through one explicit Retina renderer, color and source-in alpha mask. The refresh arrow uses a 1.2 pt rounded stroke and a balanced, larger arrowhead stroked in one pass; avoids double-alpha buildup at its join. All use 32 pt hit targets. Source-in masking corrects a subtle alpha mismatch in the earlier symbol renderer.
+
+Reproducible window-backed test: `python3 scripts/validate-toolbar.py --output /tmp/toolbar-qa.json` (requires macOS WindowServer access; briefly creates its own test window; does not touch accounts, preferences or network). Recorded result: [toolbar-build-27.json](docs/validation/toolbar-build-27.json).
+
+125/125 presentation frames: clockwise in actual AppKit coordinates, center drift below 1e-13 pt and radius error below 1e-13 pt. Reparenting to a different location retained phase (max timing error 0.0245 radians), and success/failure/idle all stopped. Gear/power remained stationary. Twenty light/dark, 1x/2x symbol raster size/nonempty checks passed. Inspected a light/dark multi-angle contact sheet and the installed popup's three icons. Build, self-tests and installed signature passed.
+
+Manual refresh clicks during final CUA verification were interrupted by noWindowsAvailable, so no new full live-refresh cycle is claimed for this build; the independent real-window continuous animation test above passed. The installed app was subsequently observed running normally with the updated toolbar. Subjective animation feel still belongs to owner acceptance; no frame-rate/energy claim and no final release or push.
+
+## Build 29: spacing and optical sizes
+
+Settings/Back use the same top-left hit target. The dashboard omits the app title; Settings shows subdued “AI Dock 1.0” at bottom right with the full candidate version in its tooltip. This is a display version, not a final release/tag. Both views remain 320×222 pt. Toolbar moves up 2 pt, quota card top moves down 4 pt without moving its bottom, divider moves down 4 pt; launcher side/bottom positions stay fixed.
+
+Measured original alpha outlines were refresh 13×16 pt, gear 15×15 pt, power 14×14.5 pt. Refresh is optically scaled 0.9375 around its existing geometric center; power's resolved symbol raster is enlarged 1.0345 around the same local center. Rotation mechanism unchanged. Build/self-tests, bilingual text fits, same-hit-target assertion and signature pass. Continuous 125-frame geometry test on the optically scaled refresh passes; recorded in docs/validation/toolbar-build-29.json. The last power-only raster adjustment does not change the refresh animation.
+
+Build 29 actual popup inspected: increased toolbar/card separation and reduced divider/launcher gap are visible; Settings shows AI Dock 1.0 at the bottom right without covering the update note. Same-position Back returned to overview; both remain the same size. Current user settings were left unchanged. App remains running; no push or release.
+
+## Final daily source synchronization, November 12
+
+Bilingual showcases regenerated from current native views with synthetic quota/network values; no live account data included. Each README shows its own language image plus the icon guide. GIF now has 79 frames, smoothstep quota interpolation, blended connectivity colors/labels and pauses at important states; Chinese 64,815 bytes, English 75,092 bytes. Main UI/build remains accepted build 29. No final tag or notarized binary is created by this source sync.

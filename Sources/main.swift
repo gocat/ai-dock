@@ -1,6 +1,8 @@
 import AppKit
 import Foundation
 import QuartzCore
+import ServiceManagement
+import UniformTypeIdentifiers
 
 // Semantic foreground stays legible in the popover's vibrant material.
 // Secondary hierarchy comes from type size and weight, not a low-contrast gray.
@@ -67,29 +69,26 @@ struct Quota {
         return lines.isEmpty ? [L("当前账户未提供额度数据")] : lines
     }
 }
-func run(_ path: String, _ args: [String], timeout: Double = 10) -> (Int32, String) {
-    let p = Process(); p.executableURL = URL(fileURLWithPath: path); p.arguments = args
-    let out = Pipe(); p.standardOutput = out; p.standardError = FileHandle.nullDevice
-    do { try p.run() } catch { return (-1, "") }
-    let timer = DispatchWorkItem { if p.isRunning { p.terminate() } }
-    DispatchQueue.global().asyncAfter(deadline: .now()+timeout, execute: timer)
-    let data = out.fileHandleForReading.readDataToEndOfFile(); p.waitUntilExit(); timer.cancel()
-    return (p.terminationStatus, String(data: data, encoding: .utf8) ?? "")
-}
-func fetchQuota() -> QuotaSnapshot {
-    let p = Process(); p.executableURL = URL(fileURLWithPath: "/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex")
-    p.arguments = ["app-server", "--stdio"]
+func fetchQuota(path: String = "/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex", arguments: [String] = ["app-server", "--stdio"], timeout: Double = 8) -> QuotaSnapshot {
+    let p = Process(); p.executableURL = URL(fileURLWithPath: path)
+    p.arguments = arguments
     let input = Pipe(), output = Pipe(); p.standardInput = input; p.standardOutput = output; p.standardError = FileHandle.nullDevice
     do { try p.run() } catch { return QuotaSnapshot(lines: [L("未找到 Codex CLI")]) }
-    let timer = DispatchWorkItem { if p.isRunning { p.terminate() } }
-    DispatchQueue.global().asyncAfter(deadline: .now()+25, execute: timer)
-    defer { timer.cancel(); if p.isRunning { p.terminate() }; try? input.fileHandleForWriting.close(); try? output.fileHandleForReading.close() }
+    let deadline = ProcessInfo.processInfo.systemUptime + timeout
+    defer {
+        if p.isRunning { kill(p.processIdentifier, SIGKILL) }
+        p.waitUntilExit()
+        try? input.fileHandleForWriting.close(); try? output.fileHandleForReading.close()
+    }
     func send(_ value: [String: Any]) { if let data = try? JSONSerialization.data(withJSONObject: value) { try? input.fileHandleForWriting.write(contentsOf: data + Data([10])) } }
     send(["id":1,"method":"initialize","params":["clientInfo":["name":"codex_companion","version":"0.1.0"],"capabilities":NSNull()]])
     var pending = Data()
-    while p.isRunning {
+    while p.isRunning && ProcessInfo.processInfo.systemUptime < deadline {
+        var descriptor = pollfd(fd: output.fileHandleForReading.fileDescriptor, events: Int16(POLLIN), revents: 0)
+        guard poll(&descriptor, 1, 100) > 0 else { continue }
         let data = output.fileHandleForReading.availableData
         if data.isEmpty { break }; pending.append(data)
+        if pending.count > 2_000_000 { break }
         while let newline = pending.firstIndex(of: 10) {
             let line = pending.prefix(upTo: newline); pending.removeSubrange(...newline)
             guard let obj = (try? JSONSerialization.jsonObject(with: line)) as? [String: Any], let id = obj["id"] as? Int else { continue }
@@ -113,7 +112,7 @@ enum ProbeTarget: CaseIterable {
 }
 func probe(_ target: ProbeTarget = .chatGPT) -> Int? {
     let config = URLSessionConfiguration.ephemeral
-    config.timeoutIntervalForRequest = 8; config.timeoutIntervalForResource = 10
+    config.timeoutIntervalForRequest = 6; config.timeoutIntervalForResource = 8
     config.httpCookieStorage = nil; config.urlCredentialStorage = nil
     let session = URLSession(configuration: config)
     defer { session.invalidateAndCancel() }
@@ -121,16 +120,17 @@ func probe(_ target: ProbeTarget = .chatGPT) -> Int? {
     request.httpMethod = "GET"; request.cachePolicy = .reloadIgnoringLocalCacheData
     let semaphore = DispatchSemaphore(value: 0)
     let start = Date(); var milliseconds: Int?
+    let lock=NSLock()
     session.dataTask(with: request) { _, response, error in
         if error == nil, let response = response as? HTTPURLResponse,
            target.accepts(response) {
             // Validate the target response. Discard the body; never log or save it.
-            milliseconds = Int(Date().timeIntervalSince(start) * 1000)
+            lock.lock();milliseconds = Int(Date().timeIntervalSince(start) * 1000);lock.unlock()
         }
         semaphore.signal()
     }.resume()
-    guard semaphore.wait(timeout: .now()+12) == .success else { return nil }
-    return milliseconds
+    guard semaphore.wait(timeout: .now()+9) == .success else { return nil }
+    lock.lock();defer { lock.unlock() };return milliseconds
 }
 struct FailureReminder {
     var failures = 0
@@ -230,50 +230,146 @@ func probeLabel(_ name: String, checked: Bool, latency: Int?, threshold: Int) ->
 }
 final class RefreshGlyphButton: NSButton {
     enum Phase { case idle, running, success, failure }
-    private let glyph = NSImageView(frame:NSRect(x:0,y:0,width:32,height:32))
+    private let glyph = CALayer()
     private var phase: Phase = .idle
+    private var rotationStarted: CFTimeInterval?
+    private var renderedAppearance: NSAppearance.Name?
+    private var renderedScale: CGFloat = 0
+    var fixedSymbol: String? { didSet { renderedAppearance=nil; update(.idle) } }
+    // Read-only geometry used by the window-backed animation regression harness.
+    var animationLayerForValidation: CALayer { glyph }
+    var drawingScale: CGFloat { window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2 }
+    override func viewDidChangeBackingProperties() { super.viewDidChangeBackingProperties(); update(phase) }
     override init(frame:NSRect) {
         super.init(frame:frame)
         title="";isBordered=false;wantsLayer=true
-        glyph.imageScaling = .scaleNone
-        glyph.wantsLayer=true
-        addSubview(glyph)
+        // Animate an owned child layer, never an AppKit-managed view backing layer.
+        glyph.bounds = CGRect(x:0,y:0,width:32,height:32)
+        glyph.anchorPoint = CGPoint(x:0.5,y:0.5)
+        glyph.position = CGPoint(x:16,y:16)
+        glyph.contentsGravity = .resizeAspect
+        layer?.addSublayer(glyph)
         update(.idle)
     }
     required init?(coder:NSCoder) { fatalError("init(coder:) is unsupported") }
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if window == nil { glyph.removeAllAnimations() }
+        else { update(phase) }
+    }
+    var isSpinning: Bool { glyph.animation(forKey:"rotation") != nil }
     func hasFixedRotationCenter()->Bool {
-        glyph.frame.size == NSSize(width:32,height:32) && CATransform3DIsIdentity(layer!.transform)
+        glyph.bounds == CGRect(x:0,y:0,width:32,height:32) && glyph.position == CGPoint(x:16,y:16) && glyph.anchorPoint == CGPoint(x:0.5,y:0.5) && CATransform3DIsIdentity(layer!.transform)
+    }
+    // The visible arc, not the symbol's asymmetric ink bounds, defines the pivot.
+    static let arcCenter = NSPoint(x:16,y:16)
+    static let arcRadius: CGFloat = 6.5
+    static let refreshOpticalScale: CGFloat = 0.9375
+    static var renderedArcRadius: CGFloat { arcRadius * refreshOpticalScale }
+    static func drawRefreshArrow() {
+        let path=NSBezierPath()
+        path.appendArc(withCenter:arcCenter,radius:arcRadius,startAngle:-45,endAngle:45,clockwise:true)
+        let q=CGFloat(1 / sqrt(2.0))
+        let tip=NSPoint(x:arcCenter.x+arcRadius*q,y:arcCenter.y+arcRadius*q)
+        // A balanced 90-degree arrowhead, tangent to the circle. Stroke both
+        // subpaths in ONE pass: no double alpha/round-cap overpainting at the tip.
+        path.move(to:NSPoint(x:tip.x,y:tip.y+4.6*q))
+        path.line(to:tip)
+        path.line(to:NSPoint(x:tip.x-4.6*q,y:tip.y))
+        path.lineWidth=1.2;path.lineCapStyle = .round;path.lineJoinStyle = .round
+        NSColor.labelColor.setStroke();path.stroke()
+    }
+    static func raster(symbol: String?, scale: CGFloat, appearance: NSAppearance) -> CGImage? {
+        let pixels=Int(32*scale)
+        guard let context=CGContext(data:nil,width:pixels,height:pixels,bitsPerComponent:8,bytesPerRow:0,
+            space:CGColorSpaceCreateDeviceRGB(),bitmapInfo:CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+        context.scaleBy(x:scale,y:scale)
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current=NSGraphicsContext(cgContext:context,flipped:false)
+        appearance.performAsCurrentDrawingAppearance {
+            if let name=symbol,
+               let image=NSImage(systemSymbolName:name,accessibilityDescription:nil)?.withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize:14,weight:.regular)) {
+                context.saveGState()
+                let size=image.size
+                image.draw(in:NSRect(x:(32-size.width)/2,y:(32-size.height)/2,width:size.width,height:size.height))
+                NSColor.labelColor.setFill()
+                NSRect(x:0,y:0,width:32,height:32).fill(using:.sourceIn)
+                context.restoreGState()
+            } else {
+                context.saveGState()
+                context.translateBy(x:16,y:16)
+                context.scaleBy(x:refreshOpticalScale,y:refreshOpticalScale)
+                context.translateBy(x:-16,y:-16)
+                drawRefreshArrow()
+                context.restoreGState()
+            }
+        }
+        NSGraphicsContext.restoreGraphicsState()
+        if symbol == "power", let native=context.makeImage() {
+            // Scale the resolved image: re-drawing SF Symbols at fractional font
+            // sizes can hint to a smaller rather than larger optical outline.
+            context.clear(CGRect(x:0,y:0,width:32,height:32))
+            context.interpolationQuality = .high
+            context.translateBy(x:16,y:16)
+            context.scaleBy(x:1.0345,y:1.0345)
+            context.draw(native,in:CGRect(x:-16,y:-16,width:32,height:32))
+        }
+        return context.makeImage()
     }
     func update(_ next:Phase) {
-        let name = next == .success ? "checkmark" : next == .failure ? "exclamationmark.circle" : "arrow.clockwise"
-        let symbol=NSImage(systemSymbolName:name,accessibilityDescription:nil)?.withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize:14,weight:.regular))
-        glyph.contentTintColor = .labelColor
+        let symbol = fixedSymbol ?? (next == .success ? "checkmark" : next == .failure ? "exclamationmark.circle" : nil)
+        let scale=drawingScale
         isEnabled = next != .running
+        // Keep the same semantic tint as the other toolbar symbols while disabled.
+        glyph.opacity = 1
         let text = next == .running ? L("正在刷新") : next == .success ? L("刷新完成") : next == .failure ? L("刷新完成，部分数据未获取") : L("刷新额度与连接状态")
-        toolTip=text;setAccessibilityLabel(text)
-        guard next != phase || glyph.image == nil else { return }
+        if fixedSymbol == nil { toolTip=text;setAccessibilityLabel(text) }
+        guard next != phase || glyph.contents == nil || renderedAppearance != effectiveAppearance.name || renderedScale != scale || (next == .running && !isSpinning) else { return }
+        renderedAppearance = effectiveAppearance.name
+        renderedScale=scale
+        if next == .running && phase != .running { rotationStarted = CACurrentMediaTime() }
+        if next != .running { rotationStarted = nil }
         let reduce=NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-        glyph.layer?.removeAllAnimations()
+        glyph.removeAllAnimations()
         CATransaction.begin();CATransaction.setDisableActions(true)
-        glyph.layer?.transform=CATransform3DIdentity
-        glyph.image=symbol
+        glyph.transform=CATransform3DIdentity
+        glyph.contentsScale=scale
+        glyph.contents=Self.raster(symbol:symbol,scale:scale,appearance:effectiveAppearance)
         CATransaction.commit()
-        // Native symbols retain their exact contours in both directions.
-        if !reduce && next != .running {
+        // Completion symbols crossfade; the refresh arc keeps a geometric pivot.
+        if !reduce && next != .running && fixedSymbol == nil {
             let transition=CATransition()
             transition.type = .fade;transition.duration=0.28
             transition.timingFunction=CAMediaTimingFunction(name:.easeInEaseOut)
-            glyph.layer?.add(transition,forKey:"symbolTransition")
+            glyph.add(transition,forKey:"symbolTransition")
         }
         if !reduce && next == .running {
             let spin=CABasicAnimation(keyPath:"transform.rotation.z")
-            spin.fromValue=0;spin.toValue=2*Double.pi
+            let angle = 2 * Double.pi * ((CACurrentMediaTime() - (rotationStarted ?? CACurrentMediaTime())) / 1.1).truncatingRemainder(dividingBy:1)
+            spin.fromValue=angle;spin.toValue = angle + 2*Double.pi
             spin.duration=1.1;spin.repeatCount = .infinity
             spin.timingFunction=CAMediaTimingFunction(name:.linear)
-            glyph.layer?.add(spin,forKey:"rotation")
+            glyph.add(spin,forKey:"rotation")
         }
         phase=next
     }
+}
+struct ProxyAppChoice {
+    static let key = "proxyApplicationBookmark"
+    static func resolve(defaults: UserDefaults = .standard) -> URL? {
+        if let data = defaults.data(forKey:key) {
+            var stale = false
+            guard let url = try? URL(resolvingBookmarkData:data, options:[.withoutUI, .withoutMounting], relativeTo:nil, bookmarkDataIsStale:&stale), valid(url) else { return nil }
+            if stale, let renewed = try? url.bookmarkData(options:[], includingResourceValuesForKeys:nil, relativeTo:nil) { defaults.set(renewed, forKey:key) }
+            return url
+        }
+        let fallback = URL(fileURLWithPath:"/Applications/Clash Verge.app")
+        return valid(fallback) ? fallback : nil
+    }
+    static func valid(_ url:URL) -> Bool {
+        url.pathExtension.lowercased() == "app" && Bundle(url:url)?.executableURL.map { FileManager.default.isExecutableFile(atPath:$0.path) } == true
+    }
+    static func name(_ url:URL) -> String { FileManager.default.displayName(atPath:url.path).replacingOccurrences(of:".app",with:"") }
 }
 final class App: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopoverDelegate {
     var status: NSStatusItem!; var timer: Timer?
@@ -282,6 +378,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopoverDeleg
     var refreshFinished: Date?
     var refreshHadFailure = false
     var settingsOpen = false
+    var loginError: String?
     let refreshGlyph = RefreshGlyphButton(frame:NSRect(x:0,y:0,width:32,height:32))
     var snapshot = QuotaSnapshot(lines: [L("额度读取中…")]); var weeklyRemaining: Double?; var appearanceObserver: NSKeyValueObservation?
     var quota = [L("额度读取中…")], latency: Int?, checked = false, quotaBusy = false, probeBusy = false
@@ -299,7 +396,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopoverDeleg
         }
         status = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         appearanceObserver = status.button?.observe(\.effectiveAppearance, options: [.new]) { [weak self] _, _ in
-            self?.refreshMenu()
+            self?.refreshMenu(forceSettings:true)
         }
         status.button?.target = self
         status.button?.action = #selector(togglePanel)
@@ -316,7 +413,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopoverDeleg
         return true
     }
     func item(_ title: String, _ action: Selector? = nil) -> NSMenuItem { let i = NSMenuItem(title:title,action:action,keyEquivalent:"");i.target=self;return i }
-    func refreshMenu() {
+    func refreshMenu(forceSettings: Bool = false) {
         let state = ProbeState.state(checked: checked, latency: latency, threshold: threshold)
         let weeklyText = weeklyRemaining.map { T("Codex 周额度剩余 \(Int(($0 * 100).rounded()))%", "Codex weekly remaining: \(Int(($0 * 100).rounded()))%") } ?? L("Codex 周额度未知")
         let probeText = checked ? latency.map { "ChatGPT HTTPS: \($0) ms\($0 > threshold ? L("（偏慢）") : L("（正常）"))" } ?? L("ChatGPT HTTPS 探测失败") : L("ChatGPT HTTPS 探测尚未完成")
@@ -337,7 +434,9 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopoverDeleg
                 self.refreshMenu()
             }
         }
+        refreshGlyph.update(manualRefresh ? .running : refreshFinished != nil ? (refreshHadFailure ? .failure : .success) : .idle)
         if settingsOpen {
+            if !forceSettings, popover.contentViewController?.view.identifier == NSUserInterfaceItemIdentifier("settings") { return }
             let view = settingsView()
             popover.contentViewController?.view = view
             popover.contentSize = view.frame.size
@@ -347,7 +446,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopoverDeleg
         let root = NSView(frame: NSRect(x: 0, y: 0, width: 320, height: dashboard.frame.height + 56))
         dashboard.setFrameOrigin(NSPoint(x: 6, y: 56))
         root.addSubview(dashboard)
-        let line = NSBox(frame: NSRect(x: 12, y: 62, width: 296, height: 1))
+        let line = NSBox(frame: NSRect(x: 12, y: 58, width: 296, height: 1))
         line.boxType = .separator
         root.addSubview(line)
         let launchers = launcherView()
@@ -372,29 +471,38 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopoverDeleg
         let choices = [1000,2000,3000,5000]
         guard choices.indices.contains(sender.selectedSegment) else { return }
         UserDefaults.standard.set(choices[sender.selectedSegment],forKey:"threshold")
-        refreshMenu()
+        refreshMenu(forceSettings:true)
     }
     @objc func setLanguage(_ sender: NSPopUpButton) {
         let values = ["system", "zh-Hans", "en"]
         guard values.indices.contains(sender.indexOfSelectedItem) else { return }
         UserDefaults.standard.set(values[sender.indexOfSelectedItem], forKey: "language")
-        refreshMenu()
+        refreshMenu(forceSettings:true)
+    }
+    @objc func toggleLogin(_ sender: NSSwitch) {
+        do {
+            if sender.state == .on { try SMAppService.mainApp.register() }
+            else { try SMAppService.mainApp.unregister() }
+            loginError = nil
+        } catch { loginError = T("未能更改，请检查系统登录项", "Could not change login item") }
+        refreshMenu(forceSettings:true)
     }
     func settingsView() -> NSView {
         let view = NSView(frame:NSRect(x:0,y:0,width:320,height:222))
-        let back = NSButton(image:NSImage(systemSymbolName:"chevron.left",accessibilityDescription:L("返回"))!,target:self,action:#selector(closeSettings))
-        back.isBordered=false;back.contentTintColor = .aidockSecondary
-        back.frame=NSRect(x:8,y:178,width:32,height:32)
-        back.toolTip=L("返回首页");back.setAccessibilityLabel(L("返回首页"));view.addSubview(back)
+        view.identifier=NSUserInterfaceItemIdentifier("settings")
         func text(_ title:String,_ x:CGFloat,_ y:CGFloat,_ width:CGFloat,_ size:CGFloat = 12)->NSTextField {
             let label=NSTextField(labelWithString:title)
             label.font = .systemFont(ofSize:size)
-            label.frame=NSRect(x:x,y:y,width:width,height:22)
+            label.frame=NSRect(x:x,y:y,width:width,height:18)
             view.addSubview(label);return label
         }
-        let title=text(L("设置"),44,182,220,14);title.font = .systemFont(ofSize:14,weight:.semibold)
-        title.sizeToFit();title.setFrameOrigin(NSPoint(x:44,y:194-title.frame.height/2))
-        let language = NSPopUpButton(frame:NSRect(x:180,y:183,width:124,height:22),pullsDown:false)
+        let title=text(L("设置"),48,187,190,14)
+        title.font = .systemFont(ofSize:14,weight:.semibold)
+        let back = RefreshGlyphButton(frame:NSRect(x:12,y:180,width:32,height:32))
+        back.fixedSymbol="chevron.left";back.target=self;back.action = #selector(closeSettings)
+        back.toolTip=L("返回首页");back.setAccessibilityLabel(L("返回首页"));view.addSubview(back)
+        _ = text(L("语言"),16,157,136,11)
+        let language = NSPopUpButton(frame:NSRect(x:16,y:134,width:136,height:22),pullsDown:false)
         language.controlSize = .small
         language.addItems(withTitles:[L("跟随系统"), "简体中文", "English"])
         language.selectItem(at:["system", "zh-Hans", "en"].firstIndex(of:UserDefaults.standard.string(forKey:"language") ?? "system") ?? 0)
@@ -402,32 +510,37 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopoverDeleg
         language.setAccessibilityLabel(L("语言"));language.toolTip=L("语言")
         view.addSubview(language)
         func toggleRow(_ title:String,_ centerY:CGFloat,_ state:NSControl.StateValue,_ action:Selector) {
-            let label=text(title,16,0,224)
-            label.sizeToFit();label.setFrameOrigin(NSPoint(x:16,y:centerY-label.frame.height/2))
-            let toggle=NSSwitch()
-            toggle.controlSize = .small
-            toggle.sizeToFit()
+            let label=text(title,16,centerY-9,224)
+            label.toolTip=title
+            let toggle=NSSwitch();toggle.controlSize = .small;toggle.sizeToFit()
             toggle.setFrameOrigin(NSPoint(x:304-toggle.frame.width,y:centerY-toggle.frame.height/2))
             toggle.target=self;toggle.action=action;toggle.state=state
-            toggle.setAccessibilityLabel(title)
-            view.addSubview(toggle)
+            toggle.setAccessibilityLabel(title);view.addSubview(toggle)
         }
-        toggleRow(L("单色菜单栏图标"),153,monochrome ? .on : .off,#selector(toggleMonochrome))
-        toggleRow(L("异常提示音"),117,UserDefaults.standard.bool(forKey:"sound") ? .on : .off,#selector(toggleSound))
-        let separator=NSBox(frame:NSRect(x:16,y:96,width:288,height:1));separator.boxType = .separator;view.addSubview(separator)
-        let thresholdLabel = text(L("超过多久算偏慢"),16,66,108)
-        thresholdLabel.sizeToFit();thresholdLabel.setFrameOrigin(NSPoint(x:16,y:76-thresholdLabel.frame.height/2))
+        let loginStatus = SMAppService.mainApp.status
+        toggleRow(T("开机启动", "Launch at login"),112,loginStatus == .enabled ? .on : .off,#selector(toggleLogin(_:)))
+        toggleRow(L("单色菜单栏图标"),85,monochrome ? .on : .off,#selector(toggleMonochrome))
+        toggleRow(L("异常提示音"),58,UserDefaults.standard.bool(forKey:"sound") ? .on : .off,#selector(toggleSound))
+        _ = text(L("超过多久算偏慢"),16,25,108)
         let choices=NSSegmentedControl(labels:[L("1 秒"),L("2 秒"),L("3 秒"),L("5 秒")],trackingMode:.selectOne,target:self,action:#selector(setThresholdChoice(_:)))
-        choices.controlSize = .small
-        choices.font = .systemFont(ofSize:11)
-        choices.frame=NSRect(x:128,y:66,width:176,height:20)
+        choices.controlSize = .small;choices.font = .systemFont(ofSize:11)
+        choices.frame=NSRect(x:128,y:25,width:176,height:20)
         choices.selectedSegment=[1000,2000,3000,5000].firstIndex(of:threshold) ?? 2
         choices.setAccessibilityLabel(L("延迟超过所选时间时显示偏慢"))
         choices.toolTip=L("仅改变偏慢状态标识，不触发弹窗提醒");view.addSubview(choices)
-        let noteTitle=text(L("超过所选时间仅标为偏慢，不弹窗"),16,37,288,10)
-        noteTitle.textColor = .aidockSecondary
-        let note=text(L("自动更新：额度 5 分钟 · 网络状态 30 秒"),16,13,288,10)
-        note.textColor = .aidockSecondary
+        let proxy = NSButton(title:ProxyAppChoice.resolve().map { ProxyAppChoice.name($0) } ?? T("选择应用…", "Choose app…"),target:self,action:#selector(chooseProxy))
+        proxy.bezelStyle = .rounded;proxy.controlSize = .small;proxy.font = .systemFont(ofSize:11)
+        proxy.frame=NSRect(x:168,y:134,width:136,height:22)
+        proxy.cell?.lineBreakMode = .byTruncatingTail
+        proxy.toolTip=T("选择要打开的代理应用（不控制连接）", "Choose a proxy app to open; does not control connections")
+        proxy.setAccessibilityLabel(T("选择代理应用", "Choose proxy app"));view.addSubview(proxy)
+        _ = text(T("代理应用", "Proxy app"),168,157,136,11)
+        let note = loginError ?? (loginStatus == .requiresApproval ? T("请在系统设置的登录项中允许启动", "Allow AI Dock in System Settings > Login Items") : L("自动更新：额度 5 分钟 · 网络状态 30 秒"))
+        let footer=text(note,16,3,216,9);footer.textColor = .aidockSecondary
+        footer.lineBreakMode = .byTruncatingTail;footer.toolTip=note
+        let branding=text("AI Dock 1.0",240,3,64,9)
+        branding.alignment = .right;branding.textColor = .secondaryLabelColor
+        branding.toolTip = "AI Dock " + (Bundle.main.object(forInfoDictionaryKey:"CFBundleShortVersionString") as? String ?? "1.0")
         return view
     }
     func dashboardView(state: ProbeState) -> NSView {
@@ -441,16 +554,15 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopoverDeleg
             view.addSubview(field)
             return field
         }
-        _ = label("AI Dock", 6, height - 46, 198, 10, .aidockSecondary)
-        let quotaCard=NSView(frame:NSRect(x:6,y:54,width:296,height:70))
+        let quotaCard=NSView(frame:NSRect(x:6,y:54,width:296,height:66))
         quotaCard.wantsLayer=true;quotaCard.layer?.cornerRadius=10
         quotaCard.layer?.backgroundColor=NSColor.labelColor.withAlphaComponent(0.045).cgColor
         view.addSubview(quotaCard)
-        _ = label("Codex", 16, height - 74, 180, 13, .labelColor, .semibold)
-        let percentage = label(weeklyRemaining.map { "\(Int(($0 * 100).rounded()))%" } ?? "—", 214, height - 74, 78, 12, .aidockSecondary)
+        _ = label("Codex", 16, height - 78, 180, 13, .labelColor, .semibold)
+        let percentage = label(weeklyRemaining.map { "\(Int(($0 * 100).rounded()))%" } ?? "—", 214, height - 78, 78, 12, .aidockSecondary)
         percentage.alignment = .right
         percentage.setAccessibilityLabel(weeklyRemaining.map { T("Codex 本周剩余额度 \(Int(($0 * 100).rounded()))%", "Codex weekly remaining: \(Int(($0 * 100).rounded()))%") } ?? L("Codex 本周额度不可用"))
-        let track = NSView(frame:NSRect(x:18,y:82,width:272,height:6))
+        let track = NSView(frame:NSRect(x:18,y:85,width:272,height:6))
         track.wantsLayer = true
         track.layer?.cornerRadius = 3
         track.layer?.backgroundColor = NSColor.quaternaryLabelColor.cgColor
@@ -491,23 +603,21 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopoverDeleg
 
         let actions: [(String, String, Selector)] = [
             ("arrow.clockwise", L("刷新额度与连接状态"), #selector(refresh)),
-            ("gearshape", L("设置"), #selector(openSettings(_:))),
-            ("power", L("退出 AI Dock"), #selector(quit))
+            ("power", L("退出 AI Dock"), #selector(quit)),
+            ("gearshape", L("设置"), #selector(openSettings(_:)))
         ]
         for (index, action) in actions.enumerated() {
             if index == 0 {
                 refreshGlyph.target = self; refreshGlyph.action = action.2
-                refreshGlyph.frame = NSRect(x:206,y:Int(height)-44,width:32,height:32)
+                refreshGlyph.frame = NSRect(x:238,y:Int(height)-42,width:32,height:32)
                 let phase: RefreshGlyphButton.Phase = manualRefresh ? .running : refreshFinished != nil ? (refreshHadFailure ? .failure : .success) : .idle
                 refreshGlyph.update(phase)
                 view.addSubview(refreshGlyph)
                 continue
             }
-            let button = NSButton(image:NSImage(systemSymbolName:action.0,accessibilityDescription:action.1)!,target:self,action:action.2)
-            button.isBordered = false; button.contentTintColor = .aidockSecondary
-            button.image = button.image?.withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize:14,weight:.regular))
-            button.imagePosition = .imageOnly; button.imageScaling = .scaleNone
-            button.frame = NSRect(x:206+index*32,y:Int(height)-44,width:32,height:32)
+            let button = RefreshGlyphButton(frame:NSRect(x:index == 1 ? 270 : 6,y:Int(height)-42,width:32,height:32))
+            button.fixedSymbol=action.0
+            button.target=self;button.action=action.2
             button.toolTip = action.1; button.setAccessibilityLabel(action.1)
             view.addSubview(button)
         }
@@ -517,7 +627,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopoverDeleg
         let view = NSView(frame: NSRect(x: 0, y: 0, width: 308, height: 52))
         let entries: [(String, String, Selector)] = [
             (L("打开 Codex"), "terminal", #selector(openCodex)),
-            (L("打开 Clash"), "lock.shield", #selector(openClash))
+            (ProxyAppChoice.resolve().map { T("打开 \(ProxyAppChoice.name($0))", "Open \(ProxyAppChoice.name($0))") } ?? T("选择应用", "Choose app"), "lock.shield", #selector(openClash))
         ]
         for (index, entry) in entries.enumerated() {
             let button = NSButton(title: entry.0, target: self, action: entry.2)
@@ -526,7 +636,18 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopoverDeleg
             else { button.controlSize = .large }
             button.isBordered = true
             button.font = .systemFont(ofSize: 13, weight: .medium)
-            let resource = index == 0 ? "CodexMono" : "ClashMono"
+            // AppKit's large push bezel may wrap titles despite NSCell.wraps.
+            // Fit the visible title explicitly; preserve the full name in AX and tooltip.
+            let font = button.font!
+            var shortTitle = entry.0
+            while (shortTitle as NSString).size(withAttributes:[.font:font]).width > 82 && shortTitle.count > 1 {
+                shortTitle.removeLast()
+            }
+            if shortTitle != entry.0 {
+                while ((shortTitle + "…") as NSString).size(withAttributes:[.font:font]).width > 82 && shortTitle.count > 1 { shortTitle.removeLast() }
+                button.title = shortTitle.trimmingCharacters(in:.whitespaces) + "…"
+            }
+            let resource = index == 0 ? "CodexMono" : "ProxyNeutral"
             if let iconURL = Bundle.main.url(forResource: resource, withExtension: "svg"), let icon = NSImage(contentsOf: iconURL) {
                 icon.size = NSSize(width: 20, height: 20)
                 icon.isTemplate = true
@@ -537,15 +658,21 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopoverDeleg
             button.imagePosition = .imageLeading
             button.imageScaling = .scaleProportionallyDown
             button.frame = NSRect(x: 6 + index * 152, y: 6, width: 144, height: 40)
+            button.cell?.wraps = false
+            button.cell?.isScrollable = true
+            button.cell?.lineBreakMode = .byTruncatingTail
+            button.toolTip = entry.0
             button.setAccessibilityLabel(entry.0)
             view.addSubview(button)
         }
         return view
     }
-    @objc func setThreshold(_ sender: NSMenuItem) { UserDefaults.standard.set(sender.tag,forKey:"threshold");refreshMenu() }
-    @objc func toggleMonochrome() { UserDefaults.standard.set(!monochrome, forKey: "monochromeIcon"); refreshMenu() }
-    @objc func toggleSound() { UserDefaults.standard.set(!UserDefaults.standard.bool(forKey:"sound"),forKey:"sound");refreshMenu() }
+    @objc func setThreshold(_ sender: NSMenuItem) { UserDefaults.standard.set(sender.tag,forKey:"threshold");refreshMenu(forceSettings:true) }
+    @objc func toggleMonochrome() { UserDefaults.standard.set(!monochrome, forKey: "monochromeIcon"); refreshMenu(forceSettings:true) }
+    @objc func toggleSound() { UserDefaults.standard.set(!UserDefaults.standard.bool(forKey:"sound"),forKey:"sound");refreshMenu(forceSettings:true) }
     @objc func refresh() {
+        guard !manualRefresh else { return }
+        refreshFinished = nil
         manualRefresh = true
         checkQuota(); checkProxy(); checkGoogle()
         refreshMenu()
@@ -557,9 +684,10 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopoverDeleg
         DispatchQueue.global(qos:.utility).async { let value=probe();DispatchQueue.main.async {
             self.latency=value;self.checked=true;self.probeBusy=false
             self.recentFailures.append(value == nil);self.recentFailures=Array(self.recentFailures.suffix(10))
+            self.refreshMenu()
             if self.reminder.record(reachable: value != nil) {
                 if UserDefaults.standard.bool(forKey:"sound") { NSSound.beep() }
-                let alert=NSAlert();alert.messageText=L("ChatGPT HTTPS 探测异常");alert.informativeText=L("连续 5 次未能连通测试地址，请检查网络或 Clash。\n\n同一轮故障只提醒一次；此结果不代表 Codex 会话已断开。")
+                let alert=NSAlert();alert.messageText=L("ChatGPT HTTPS 探测异常");alert.informativeText=L("连续 5 次未能连通测试地址，请检查网络或代理应用。\n\n同一轮故障只提醒一次；此结果不代表 Codex 会话已断开。")
                 alert.addButton(withTitle:L("知道了"));alert.alertStyle = .warning;alert.window.level = .floating
                 alert.runModal()
             };self.refreshMenu()
@@ -583,11 +711,35 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopoverDeleg
         launcherError = NSWorkspace.shared.open(URL(string: "codex://")!) ? nil : L("无法打开 Codex")
         refreshMenu()
     }
+    @objc func chooseProxy() {
+        popover.performClose(nil)
+        let panel=NSOpenPanel()
+        panel.title=T("选择代理应用", "Choose proxy app")
+        panel.message=T("只打开应用，不会更改代理连接。", "Opens the app only; does not change your connection.")
+        panel.canChooseFiles=true;panel.canChooseDirectories=false;panel.allowsMultipleSelection=false
+        panel.directoryURL=URL(fileURLWithPath:"/Applications")
+        panel.allowedContentTypes = [.applicationBundle]
+        NSApp.activate(ignoringOtherApps:true)
+        if panel.runModal() == .OK, let url=panel.url {
+            do {
+                guard ProxyAppChoice.valid(url) else { throw CocoaError(.fileReadUnsupportedScheme) }
+                let data=try url.bookmarkData(options:[],includingResourceValuesForKeys:nil,relativeTo:nil)
+                UserDefaults.standard.set(data,forKey:ProxyAppChoice.key)
+            } catch { showLauncherError(T("无法使用这个应用，请重新选择。", "Cannot use this app. Please choose another.")) }
+        }
+        togglePanel();settingsOpen=true;refreshMenu()
+    }
+    func showLauncherError(_ message:String) {
+        let alert=NSAlert();alert.messageText=message;alert.addButton(withTitle:L("知道了"));alert.runModal()
+    }
     @objc func openClash() {
+        guard let url=ProxyAppChoice.resolve() else { chooseProxy();return }
         popover.performClose(nil)
         let config = NSWorkspace.OpenConfiguration(); config.activates = true
-        NSWorkspace.shared.openApplication(at: URL(fileURLWithPath: "/Applications/Clash Verge.app"), configuration: config) { _, error in
-            DispatchQueue.main.async { self.launcherError = error == nil ? nil : L("无法打开 Clash，请检查安装"); self.refreshMenu() }
+        NSWorkspace.shared.openApplication(at:url, configuration:config) { _, error in
+            DispatchQueue.main.async {
+                if error != nil { self.showLauncherError(T("无法打开所选代理应用，请在设置中重新选择。", "Could not open the proxy app. Choose it again in Settings.")) }
+            }
         }
     }
     @objc func quit() {
@@ -626,6 +778,27 @@ if CommandLine.arguments.contains("--self-test") {
     precondition(fixture.refreshGlyph.isEnabled && fixture.refreshGlyph.toolTip == "刷新完成")
     fixture.refreshGlyph.update(.failure)
     precondition(fixture.refreshGlyph.toolTip!.contains("部分数据"))
+    precondition(RefreshGlyphButton.arcCenter == NSPoint(x:16,y:16))
+    precondition(!fixture.refreshGlyph.isSpinning)
+    fixture.refreshGlyph.update(.idle)
+    precondition(!fixture.refreshGlyph.isSpinning)
+    let dashboard=fixture.dashboardView(state:.normal)
+    let gear=dashboard.subviews.compactMap { $0 as? NSButton }.first { $0.toolTip == L("设置") }!
+    let back=settings.subviews.compactMap { $0 as? NSButton }.first { $0.toolTip == L("返回首页") }!
+    precondition(back.frame == gear.frame.offsetBy(dx:6,dy:56), "Back must share Settings hit target")
+    let timedStart=ProcessInfo.processInfo.systemUptime
+    let timed=fetchQuota(path:"/bin/sh",arguments:["-c", "trap '' TERM; while :; do read line || :; done"],timeout:0.3)
+    precondition(timed.weeklyRemaining == nil && timed.lines.first!.contains("超时"))
+    precondition(ProcessInfo.processInfo.systemUptime-timedStart < 1.5, "Quota timeout must reap unresponsive child")
+    let missing=fetchQuota(path:"/nonexistent/aidock-test-cli",timeout:0.1)
+    precondition(missing.lines == [L("未找到 Codex CLI")])
+    let suite="app.aidock.selftest."+UUID().uuidString
+    let defaults=UserDefaults(suiteName:suite)!
+    defaults.set(Data([0,1,2]),forKey:ProxyAppChoice.key)
+    precondition(ProxyAppChoice.resolve(defaults:defaults) == nil, "Invalid saved choice must not silently fall back")
+    defaults.removePersistentDomain(forName:suite)
+    precondition(!ProxyAppChoice.valid(URL(fileURLWithPath:"/tmp")))
+    print("PASS: bounded unresponsive CLI cleanup, missing CLI, stopped animations, same-position Back, invalid app selection")
     print("PASS: native symbols, contained settings controls, refresh running/success/failure states")
     for target in ProbeTarget.allCases {
         precondition(target.accepts(HTTPURLResponse(url: target.url, statusCode: target.expectedStatus, httpVersion: nil, headerFields: nil)!))

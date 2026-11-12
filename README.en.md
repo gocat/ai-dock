@@ -24,7 +24,7 @@ The script downloads source from this repository, builds and tests it locally, t
 
 **Requires macOS 14+, Apple Command Line Tools, and Python 3.** If the compiler tools are missing, run `xcode-select --install`, finish Apple's installer, and rerun the command. The initial tool download can be large; build time depends on your Mac and network. Tested on Apple silicon; Intel is not device-tested.
 
-Quota reads currently use the Codex CLI inside `/Applications/ChatGPT.app` and its existing login. A web account or a separately installed Codex CLI alone does not guarantee compatibility with this fixed path. Without it, quota is unavailable but network checks still work. The installer never requests credentials or changes proxy settings. The Clash launcher currently expects Clash Verge.
+Quota reads currently use the Codex CLI inside `/Applications/ChatGPT.app` and its existing login. A web account or a separately installed Codex CLI alone does not guarantee compatibility with this fixed path. Without it, quota is unavailable but network checks still work. The installer never requests credentials or changes proxy settings. The proxy launcher defaults to an installed Clash Verge; choose another local app in Settings.
 
 **Why no DMG yet?** Honestly, I don't want to pay Apple's developer membership fee for this little utility right now. Making a DMG is free; developer signing and notarization are what make distribution smoother. For now, asking your AI assistant or pasting one command to build locally is convenient enough. A chat-only AI cannot install it for you, but can guide you.
 
@@ -32,19 +32,19 @@ Quota reads currently use the Codex CLI inside `/Applications/ChatGPT.app` and i
 
 ![Animated icon guide: outer arc shows quota; center dot shows OK, slow and unreachable](docs/images/icon-states-en.gif)
 
-The animated guide is about 22 KB. The outer arc shows 100%, 50%, and 0% remaining quota. Green, amber, and red center dots mean OK, slow, and unreachable. Zero quota does not mean a network failure; unknown quota uses a dashed arc. Examples show color mode, and connectivity does not establish VPN or Codex session health.
+The animated guide is about 75 KB, with eased transitions and readable holds. The outer arc shows 100%, 50%, and 0% remaining quota. Green, amber, and red center dots mean OK, slow, and unreachable. Zero quota does not mean a network failure; unknown quota uses a dashed arc. Examples show color mode, and connectivity does not establish VPN or Codex session health.
 
-Supports light and dark appearances. This AI-assisted showcase uses sample data and includes redrawn visual details. Application brand marks identify the launch targets; the default source build uses neutral system symbols. The showcase predates the language selector.
+Supports light and dark appearances. This showcase renders the current native views with synthetic example data and the public build’s neutral symbols. Actual popover material varies with system appearance and background.
 
 ## Language
 
-Open Settings and use the language menu at the top right: **System**, **简体中文**, or **English**. Changes apply immediately and are saved locally. System mode uses Chinese when the system's preferred language is Chinese, and English otherwise.
+Open Settings and use the labeled Language menu on the left: **System**, **简体中文**, or **English**. Changes apply immediately and are saved locally. System mode uses Chinese when the system's preferred language is Chinese, and English otherwise.
 
 ## What it does
 
 - Shows remaining Codex weekly quota, a progress bar, and the reset countdown.
 - Independently measures HTTPS response times to ChatGPT and Google.
-- Opens Codex and Clash Verge; it does not change proxy settings or connect a VPN.
+- Opens Codex and a user-selected proxy app; it does not change proxy settings or connect a VPN.
 - Provides manual refresh, monochrome menu bar mode, an optional alert sound, and quit confirmation.
 - Keeps the overview and settings at the same compact size. Reopening the popover returns to the overview.
 
@@ -64,7 +64,7 @@ The build is locally ad-hoc signed, not Developer ID signed or notarized. No not
 
 Quota reads currently require the Codex CLI bundled at `/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex` and its existing authenticated account. The app invokes `app-server --stdio` and `account/rateLimits/read`; it does not read authentication files directly. The CLI account may differ from the account selected in a desktop UI. Only the reported Codex weekly window is supported. Missing or failed quota data is shown as unavailable.
 
-The Clash launcher currently expects `/Applications/Clash Verge.app`. These fixed dependencies are not automatically installed.
+Select a local proxy application in Settings. Clash Verge is the compatibility default when installed. Dependencies are not automatically installed.
 
 ## Network and privacy
 
@@ -75,7 +75,7 @@ The Clash launcher currently expects `/Applications/Clash Verge.app`. These fixe
 
 Probes use ephemeral URLSession instances without app-supplied credentials or cookies. Response bodies are discarded, not logged. Requests follow system networking and proxy rules; different hosts may take different routes. Reachability does not establish VPN connectivity or Codex session health.
 
-Only language, latency threshold, monochrome mode, and sound preferences are stored locally. The app does not change login credentials, network settings, or startup items. This describes the app's code, not a complete traffic audit of the Codex CLI or system dependencies.
+Language, latency threshold, monochrome mode, sound, and a bookmark for the selected app are stored locally. Launch at login is opt-in and managed by the system login-item service. The app does not change login credentials or network settings. This describes the app's code, not a complete traffic audit of the Codex CLI or system dependencies.
 
 ## Performance and limitations
 
@@ -86,3 +86,7 @@ Real expired-login cases, extended sleep/wake testing, and broader OS/architectu
 ## License
 
 Original project code: [MIT](LICENSE), Copyright (c) 2026 gocat. Third-party trademarks, artwork, and system symbols do not gain additional permissions through this project's license. See [third-party notes](THIRD_PARTY.md).
+
+## 1.0 candidate
+
+Local candidate `1.0.0-rc.8` (build 29) is not a final release. Settings keeps the same panel size and places Back at the overview Settings hit target. Quota reads have an approximately 8-second deadline with child cleanup; network resources time out after 8 seconds, with a 9-second wait fallback. Partial failures stop the spinner without showing a success checkmark.

@@ -59,7 +59,7 @@ enum L10n {
         "打开 Codex": "Open Codex",
         "打开 Clash": "Open Clash",
         "ChatGPT HTTPS 探测异常": "ChatGPT HTTPS probe failed",
-        "连续 5 次未能连通测试地址，请检查网络或 Clash。\n\n同一轮故障只提醒一次；此结果不代表 Codex 会话已断开。": "The test endpoint could not be reached on 5 consecutive checks. Check your network or Clash.\n\nOne reminder per incident. This does not mean your Codex session is disconnected.",
+        "连续 5 次未能连通测试地址，请检查网络或代理应用。\n\n同一轮故障只提醒一次；此结果不代表 Codex 会话已断开。": "The test endpoint could not be reached on 5 consecutive checks. Check your network or proxy app.\n\nOne reminder per incident. This does not mean your Codex session is disconnected.",
         "知道了": "OK",
         "无法打开 Codex": "Could not open Codex",
         "无法打开 Clash，请检查安装": "Could not open Clash. Check its installation.",

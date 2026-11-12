@@ -1,3 +1,27 @@
+# November 12 final daily update
+
+Local build 29 / 1.0.0-rc.8 is the accepted end-of-day snapshot. The small in-app label is “AI Dock 1.0”; this source synchronization does not create a final release tag or signed installer.
+
+- Left-aligned Settings/Back, balanced spacing, consistent toolbar rendering and stable clockwise refresh motion.
+- Configurable local proxy launcher, opt-in launch at login, explicit bilingual language controls.
+- Bounded refresh waits and subprocess cleanup; no VPN connection control.
+- Current bilingual native-view showcases and eased, lightweight icon-guide GIFs (about 65/75 KB).
+- Validation and remaining platform limitations: see VALIDATION.md.
+
+---
+
+# Local 1.0 candidate — 2026-11-12
+
+`1.0.0-rc.8` / build 29. Awaiting owner review; not a final tag or release.
+
+- Bounded quota/process and HTTPS waits; stop refresh feedback after completion or failure, preserve rotation phase across view rebuilds.
+- Move quota progress upward; keep the fixed panel size.
+- Same-position Settings/Back, explicit Language label, compact native controls and opt-in Launch at login.
+- Select and remember a local proxy application; open only, no connection control. Fit long launcher labels on one line with full-name tooltips.
+- See VALIDATION.md for tested and pending cases.
+
+---
+
 # AI Dock — 0.1.0 source snapshot
 
 A small macOS menu-bar companion for Codex quota and independent connectivity checks.
