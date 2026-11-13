@@ -32,8 +32,11 @@ PY
 # times and only surface the error if it keeps happening.
 for attempt in 1 2 3; do
   xattr -cr "$app"
-  codesign --force --sign - "$app" 2>/dev/null && break
-  [[ "$attempt" == 3 ]] && codesign --force --sign - "$app"
+  if codesign --force --sign - "$app" 2>/dev/null; then
+    break
+  elif [[ "$attempt" == 3 ]]; then
+    codesign --force --sign - "$app"
+  fi
 done
 codesign --verify --deep --strict "$app"
 "$app/Contents/MacOS/CodexCompanion" --self-test
