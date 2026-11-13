@@ -375,6 +375,9 @@ struct ProxyAppChoice {
 // Refresh once per burst instead of once per notification.
 struct RefreshCoalescer {
     let minimumInterval: TimeInterval
+    // Explicit initializer: the synthesized memberwise one would inherit the
+    // private access of `last` and become uncallable from other files/builds.
+    init(minimumInterval: TimeInterval) { self.minimumInterval = minimumInterval }
     private var last: Date = .distantPast
     mutating func allows(now: Date = Date()) -> Bool {
         guard now.timeIntervalSince(last) >= minimumInterval else { return false }
