@@ -71,9 +71,11 @@ fi
 [[ -f "$source_dir/build.sh" && -f "$source_dir/Sources/main.swift" ]] || fail 'Source folder is incomplete.'
 echo 'Building and testing locally… / 正在本机构建和自测…'
 (cd "$source_dir" && AI_DOCK_BUNDLE_ID="$bundle_id" bash build.sh review)
-codesign --verify --deep --strict "$source_dir/build/AI Dock.app"
 stage="$(mktemp -d "$install_dir/.ai-dock-stage.XXXXXX")"
 ditto "$source_dir/build/AI Dock.app" "$stage/AI Dock.app"
+# Verify the copy that is about to be installed. Synced source folders can regain
+# provider metadata, so the source copy is not the right place to check.
+xattr -cr "$stage/AI Dock.app"
 codesign --verify --deep --strict "$stage/AI Dock.app"
 if [[ -d "$target" ]]; then
   backup_dir="$(mktemp -d "$install_dir/.ai-dock-backup.XXXXXX")"

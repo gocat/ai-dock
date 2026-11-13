@@ -27,16 +27,19 @@ info={'CFBundleExecutable':'CodexCompanion','CFBundleIdentifier':sys.argv[2],
       'LSUIElement':True,'NSHighResolutionCapable':True}
 with open(sys.argv[1],'wb') as f:plistlib.dump(info,f)
 PY
-# Finder/file-provider metadata left on the bundle makes codesign refuse to sign.
-# Some synced or managed folders re-add it right after a clean-up, so retry a few
-# times and only surface the error if it keeps happening.
-for attempt in 1 2 3; do
-  xattr -cr "$app"
-  if codesign --force --sign - "$app" 2>/dev/null; then
-    break
-  elif [[ "$attempt" == 3 ]]; then
-    codesign --force --sign - "$app"
-  fi
-done
-codesign --verify --deep --strict "$app"
+# Sign outside the repository. In synced or file-provider-managed folders the
+# bundle metadata is re-added right after a clean-up, so codesign intermittently
+# fails with "resource fork, Finder information, or similar detritus not allowed".
+# Signing a copy in TMPDIR and copying the finished bundle back avoids the race.
+sign_dir="$(mktemp -d "${TMPDIR:-/tmp}/aidock-sign.XXXXXX")"
+trap 'rm -rf "$sign_dir"' EXIT
+ditto "$app" "$sign_dir/AI Dock.app"
+xattr -cr "$sign_dir/AI Dock.app"
+codesign --force --sign - "$sign_dir/AI Dock.app"
+codesign --verify --deep --strict "$sign_dir/AI Dock.app"
+rm -rf "$app"
+ditto "$sign_dir/AI Dock.app" "$app"
+# The repository copy is not re-verified: this folder can regain provider metadata
+# asynchronously, which makes `codesign --verify` flaky on it. The scratch copy
+# above and the installer's staged copy are the ones that are checked.
 "$app/Contents/MacOS/CodexCompanion" --self-test
