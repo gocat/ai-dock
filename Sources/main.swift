@@ -169,11 +169,16 @@ enum ProbeState: Equatable {
     }
 }
 enum LampStyle: Equatable {
-    case hollow, white, neutral, green, orange, red
+    case hollow, white, gray, neutral, green, orange, red
     static func resolve(state: ProbeState, monochrome: Bool, persistentFailure: Bool) -> LampStyle {
         if monochrome {
             if state == .unknown { return .hollow }
-            return state == .failed && persistentFailure ? .red : .white
+            switch state {
+            case .normal: return .white
+            case .slow: return .gray
+            case .failed: return .red
+            case .unknown: return .hollow
+            }
         }
         switch state {
         case .unknown: return .neutral
@@ -185,6 +190,7 @@ enum LampStyle: Equatable {
     var color: NSColor {
         switch self {
         case .hollow, .white: return .white
+        case .gray: return NSColor(white: 0.55, alpha: 1)
         case .neutral: return .aidockSecondary
         case .green: return .systemGreen
         case .orange: return .systemOrange
@@ -659,9 +665,11 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopoverDeleg
     }
     func launcherView() -> NSView {
         let view = NSView(frame: NSRect(x: 0, y: 0, width: 308, height: 52))
+        let proxy = ProxyAppChoice.resolve()
+        let isClash = proxy.map { Bundle(url:$0)?.bundleIdentifier == "io.github.clash-verge-rev.clash-verge-rev" || ProxyAppChoice.name($0).lowercased().hasPrefix("clash") } ?? false
         let entries: [(String, String, Selector)] = [
             (L("打开 Codex"), "terminal", #selector(openCodex)),
-            (ProxyAppChoice.resolve().map { T("打开 \(ProxyAppChoice.name($0))", "Open \(ProxyAppChoice.name($0))") } ?? T("选择应用", "Choose app"), "lock.shield", #selector(openClash))
+            (ProxyAppChoice.resolve().map { T("打开 \(isClash ? "Clash" : ProxyAppChoice.name($0))", "Open \(isClash ? "Clash" : ProxyAppChoice.name($0))") } ?? T("选择应用", "Choose app"), "lock.shield", #selector(openClash))
         ]
         for (index, entry) in entries.enumerated() {
             let button = NSButton(title: entry.0, target: self, action: entry.2)
@@ -681,9 +689,11 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopoverDeleg
                 while ((shortTitle + "…") as NSString).size(withAttributes:[.font:font]).width > 82 && shortTitle.count > 1 { shortTitle.removeLast() }
                 button.title = shortTitle.trimmingCharacters(in:.whitespaces) + "…"
             }
-            let resource = index == 0 ? "CodexMono" : "ProxyNeutral"
+            let resource = index == 0 ? "LauncherCodex" : (isClash ? "LauncherClash" : "ProxyNeutral")
             if let iconURL = Bundle.main.url(forResource: resource, withExtension: "svg"), let icon = NSImage(contentsOf: iconURL) {
-                icon.size = NSSize(width: 20, height: 20)
+                // Clash source has ~9% inset on each side; normalize visible mark size.
+                let size: CGFloat = index == 1 && isClash ? 24 : 20
+                icon.size = NSSize(width: size, height: size)
                 icon.isTemplate = true
                 button.image = icon
             } else {
@@ -921,8 +931,8 @@ if CommandLine.arguments.contains("--self-test") {
     precondition(!persistentProbeFailure([true, true, false]))
     precondition(LampStyle.resolve(state: .unknown, monochrome: true, persistentFailure: false) == .hollow)
     precondition(LampStyle.resolve(state: .normal, monochrome: true, persistentFailure: true) == .white)
-    precondition(LampStyle.resolve(state: .slow, monochrome: true, persistentFailure: true) == .white)
-    precondition(LampStyle.resolve(state: .failed, monochrome: true, persistentFailure: false) == .white)
+    precondition(LampStyle.resolve(state: .slow, monochrome: true, persistentFailure: true) == .gray)
+    precondition(LampStyle.resolve(state: .failed, monochrome: true, persistentFailure: false) == .red)
     precondition(LampStyle.resolve(state: .failed, monochrome: true, persistentFailure: true) == .red)
     precondition(LampStyle.resolve(state: .failed, monochrome: false, persistentFailure: false) == .red)
     // Menu-bar slow must match the panel swatch: both are system orange, not yellow.

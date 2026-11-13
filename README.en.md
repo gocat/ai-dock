@@ -36,7 +36,7 @@ Quota reads currently use the Codex CLI inside `/Applications/ChatGPT.app` and i
 
 The animated guide is about 75 KB, with eased transitions and readable holds. The outer arc shows 100%, 50%, and 0% remaining quota. Green, orange, and red center dots mean OK, slow, and unreachable; orange matches the panel swatch. Zero quota does not mean a network failure; unknown quota uses a dashed arc. Examples show color mode, and connectivity does not establish VPN or Codex session health.
 
-Supports light and dark appearances. This showcase renders the current native views with synthetic example data and the public build’s neutral symbols. Actual popover material varies with system appearance and background.
+Supports light and dark appearances. This showcase renders native views with synthetic example data; the illustration predates the new monochrome Codex and Clash launcher icons. Actual popover material varies with system appearance and background.
 
 ## Language
 
@@ -47,7 +47,7 @@ Open Settings and use the labeled Language menu on the left: **System**, **简�
 - Shows remaining Codex weekly quota, a progress bar, and the reset countdown.
 - Independently measures HTTPS response times to ChatGPT and Google.
 - Opens Codex and a user-selected proxy app; it does not change proxy settings or connect a VPN.
-- Provides manual refresh, monochrome menu bar mode, an optional alert sound, and quit confirmation.
+- Provides manual refresh, monochrome menu bar mode (white: normal, gray: slow, red: unreachable; hollow: not checked), an optional alert sound, and quit confirmation.
 - Keeps the overview and settings at the same compact size. Reopening the popover returns to the overview.
 
 Quota refreshes every 5 minutes; network checks run every 30 seconds. Wake from sleep triggers one extra refresh about 5 seconds later, with duplicate wake notifications merged into a single pass. A slow result changes the status only. Connectivity failures never open a modal alert: the menu-bar lamp and the panel are the only signal. The optional alert sound, if enabled, still fires at most once per incident after 5 consecutive failures, with a 30-minute minimum interval; 3 successful checks rearm it. Google never triggers the sound. Reminder state resets when the app restarts.

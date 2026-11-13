@@ -13,6 +13,7 @@ mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources" build/module-cache
 # Always start from a clean resource set so private preview assets cannot leak.
 find "$app/Contents/Resources" -maxdepth 1 -type f -delete
 bash scripts/generate-icon.sh
+cp Resources/Launcher*.svg Resources/*LICENSE.txt Resources/Clash-GPL-3.0.txt "$app/Contents/Resources/"
 cp build/Companion.icns "$app/Contents/Resources/Companion.icns"
 if [[ "$mode" == local-icons ]]; then
   cp Resources/CodexMono.svg Resources/ClashMono.svg "$app/Contents/Resources/"
@@ -23,7 +24,7 @@ import plistlib,sys
 info={'CFBundleExecutable':'CodexCompanion','CFBundleIdentifier':sys.argv[2],
       'CFBundleName':'AI Dock','CFBundleDisplayName':'AI Dock','CFBundleIconFile':'Companion',
       'CFBundlePackageType':'APPL','LSApplicationCategoryType':'public.app-category.utilities',
-      'CFBundleVersion':'31','CFBundleShortVersionString':'1.0.0-rc.10','LSMinimumSystemVersion':'14.0',
+      'CFBundleVersion':'34','CFBundleShortVersionString':'1.0.0-rc.13','LSMinimumSystemVersion':'14.0',
       'LSUIElement':True,'NSHighResolutionCapable':True}
 with open(sys.argv[1],'wb') as f:plistlib.dump(info,f)
 PY

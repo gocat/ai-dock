@@ -136,3 +136,11 @@ Installer follow-up: `bash build.sh` now ad-hoc signs a copy of the bundle in `T
 - The installer ran its own build and eleven self-test groups, verified the staged bundle after clearing provider metadata, then swapped the bundle.
 - Launched with `open`: the process stayed up with a stable RSS, and no new crash report was written to `~/Library/Logs/DiagnosticReports`.
 - Still owner-verified only: how orange reads in a light and dark menu bar, and that a real outage produces no modal alert. Screen capture is unavailable in this session, so the live menu bar was not screenshotted. Manual steps are listed in README under 构建与验证 / "Check an installed build".
+
+## 2026-11-13 — build 34 launcher and monochrome fixes
+
+- Build and existing self-tests passed; installed candidate 1.0.0-rc.13 / build 34.
+- Monochrome lamp maps normal/slow/failed to white/opaque gray/red, unknown to hollow, at fixed size.
+- Bundled monochrome Codex and Clash assets with their source SVGs and separate license texts. Other proxy apps retain a shield; Clash uses compact Chinese and English labels.
+- Reproduced CoreSVG corruption of compressed arc parameters with AppKit, then expanded path parameters and visually verified the corrected AppKit raster. Installed SVG matches the corrected source.
+- Owner confirmed the final icon displays correctly. Automated live menu UI access remained unavailable.
