@@ -371,8 +371,22 @@ struct ProxyAppChoice {
     }
     static func name(_ url:URL) -> String { FileManager.default.displayName(atPath:url.path).replacingOccurrences(of:".app",with:"") }
 }
+// Wake can post more than one notification for a single lid/screen burst.
+// Refresh once per burst instead of once per notification.
+struct RefreshCoalescer {
+    let minimumInterval: TimeInterval
+    private var last: Date = .distantPast
+    mutating func allows(now: Date = Date()) -> Bool {
+        guard now.timeIntervalSince(last) >= minimumInterval else { return false }
+        last = now
+        return true
+    }
+}
 final class App: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopoverDelegate {
     var status: NSStatusItem!; var timer: Timer?
+    // Test instrumentation: how many popover view builds actually happened.
+    var panelBuildCount = 0
+    var wakeCoalescer = RefreshCoalescer(minimumInterval: 10)
     let popover = NSPopover()
     var manualRefresh = false
     var refreshFinished: Date?
@@ -406,42 +420,58 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopoverDeleg
         refreshMenu(); refresh()
         DispatchQueue.main.async { if !self.popover.isShown { self.togglePanel() } }
         timer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in self?.checkProxy(); self?.checkGoogle() }
+        // Let the system coalesce the periodic wake-ups instead of pinning them.
+        timer?.tolerance = 3
         Timer.scheduledTimer(withTimeInterval: 300, repeats: true) { [weak self] _ in self?.checkQuota() }.tolerance = 15
+        // Timers do not fire while asleep, so results are stale right after wake.
+        // Refresh once per wake burst; nothing here blocks the sleep notification.
+        NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(handleWake), name: NSWorkspace.didWakeNotification, object: nil)
     }
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         if !popover.isShown { togglePanel() }
         return true
     }
     func item(_ title: String, _ action: Selector? = nil) -> NSMenuItem { let i = NSMenuItem(title:title,action:action,keyEquivalent:"");i.target=self;return i }
-    func refreshMenu(forceSettings: Bool = false) {
-        let state = ProbeState.state(checked: checked, latency: latency, threshold: threshold)
+    func updateStatusItem(state: ProbeState) {
+        guard let button = status?.button else { return }
         let weeklyText = weeklyRemaining.map { T("Codex 周额度剩余 \(Int(($0 * 100).rounded()))%", "Codex weekly remaining: \(Int(($0 * 100).rounded()))%") } ?? L("Codex 周额度未知")
         let probeText = checked ? latency.map { "ChatGPT HTTPS: \($0) ms\($0 > threshold ? L("（偏慢）") : L("（正常）"))" } ?? L("ChatGPT HTTPS 探测失败") : L("ChatGPT HTTPS 探测尚未完成")
-        status.button?.title = ""
-        status.button?.image = statusIcon(remaining: weeklyRemaining, state: state, monochrome: monochrome, persistentFailure: persistentProbeFailure(recentFailures))
-        status.button?.imagePosition = .imageOnly
+        button.title = ""
+        button.image = statusIcon(remaining: weeklyRemaining, state: state, monochrome: monochrome, persistentFailure: persistentProbeFailure(recentFailures))
+        button.imagePosition = .imageOnly
         let description = "\(weeklyText); \(probeText); \(probeLabel("Google", checked: googleChecked, latency: googleLatency, threshold: threshold)). " + T("HTTPS 请求耗时，不代表 Codex 会话或 VPN 连接状态。", "HTTPS latency does not establish Codex session health or a VPN connection.")
-        status.button?.toolTip = description
-        status.button?.setAccessibilityLabel(description)
-        if manualRefresh && !quotaBusy && !probeBusy && !googleBusy {
-            manualRefresh = false
-            refreshFinished = Date()
-            refreshHadFailure = weeklyRemaining == nil || latency == nil || googleLatency == nil
-            let completion = refreshFinished
-            DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
-                guard let self = self, !self.manualRefresh, self.refreshFinished == completion else { return }
-                self.refreshFinished = nil
-                self.refreshMenu()
-            }
+        button.toolTip = description
+        button.setAccessibilityLabel(description)
+    }
+    func finishPendingManualRefresh() {
+        guard manualRefresh, !quotaBusy, !probeBusy, !googleBusy else { return }
+        manualRefresh = false
+        refreshFinished = Date()
+        refreshHadFailure = weeklyRemaining == nil || latency == nil || googleLatency == nil
+        let completion = refreshFinished
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+            guard let self = self, !self.manualRefresh, self.refreshFinished == completion else { return }
+            self.refreshFinished = nil
+            self.refreshMenu()
         }
+    }
+    func refreshMenu(forceSettings: Bool = false, forcePanel: Bool = false) {
+        let state = ProbeState.state(checked: checked, latency: latency, threshold: threshold)
+        updateStatusItem(state: state)
+        finishPendingManualRefresh()
         refreshGlyph.update(manualRefresh ? .running : refreshFinished != nil ? (refreshHadFailure ? .failure : .success) : .idle)
+        // A closed popover is not visible: only the menu-bar item has to stay
+        // current. Rebuilding its view tree on every 30 s result was pure churn.
+        guard forcePanel || popover.isShown || settingsOpen else { return }
         if settingsOpen {
             if !forceSettings, popover.contentViewController?.view.identifier == NSUserInterfaceItemIdentifier("settings") { return }
+            panelBuildCount += 1
             let view = settingsView()
             popover.contentViewController?.view = view
             popover.contentSize = view.frame.size
             return
         }
+        panelBuildCount += 1
         let dashboard = dashboardView(state: state)
         let root = NSView(frame: NSRect(x: 0, y: 0, width: 320, height: dashboard.frame.height + 56))
         dashboard.setFrameOrigin(NSPoint(x: 6, y: 56))
@@ -458,7 +488,8 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopoverDeleg
     @objc func togglePanel() {
         if popover.isShown { popover.performClose(nil); return }
         settingsOpen = false
-        refreshMenu()
+        // The popover is still closed at this point, so ask for the build explicitly.
+        refreshMenu(forcePanel: true)
         if let button = status.button {
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
             popover.contentViewController?.view.window?.makeKey()
@@ -670,6 +701,21 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopoverDeleg
     @objc func setThreshold(_ sender: NSMenuItem) { UserDefaults.standard.set(sender.tag,forKey:"threshold");refreshMenu(forceSettings:true) }
     @objc func toggleMonochrome() { UserDefaults.standard.set(!monochrome, forKey: "monochromeIcon"); refreshMenu(forceSettings:true) }
     @objc func toggleSound() { UserDefaults.standard.set(!UserDefaults.standard.bool(forKey:"sound"),forKey:"sound");refreshMenu(forceSettings:true) }
+    // Timers are silent while the Mac sleeps, so wake is the only hint that the
+    // menu-bar reading is stale. Wi-Fi and VPN usually need a moment to come back,
+    // so the refresh waits out a short grace period instead of probing immediately.
+    static let wakeGraceSeconds: TimeInterval = 5
+    @objc func handleWake() {
+        if Thread.isMainThread { armWakeRefresh() }
+        else { DispatchQueue.main.async { [weak self] in self?.armWakeRefresh() } }
+    }
+    func armWakeRefresh() {
+        guard wakeCoalescer.allows() else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.wakeGraceSeconds) { [weak self] in
+            guard let self = self, !self.manualRefresh else { return }
+            self.checkQuota(); self.checkProxy(); self.checkGoogle()
+        }
+    }
     @objc func refresh() {
         guard !manualRefresh else { return }
         refreshFinished = nil
@@ -792,6 +838,22 @@ if CommandLine.arguments.contains("--self-test") {
     precondition(ProcessInfo.processInfo.systemUptime-timedStart < 1.5, "Quota timeout must reap unresponsive child")
     let missing=fetchQuota(path:"/nonexistent/aidock-test-cli",timeout:0.1)
     precondition(missing.lines == [L("未找到 Codex CLI")])
+    var gate = RefreshCoalescer(minimumInterval: 10)
+    let wakeTime = Date(timeIntervalSince1970: 60000)
+    precondition(gate.allows(now: wakeTime), "First wake must refresh")
+    precondition(!gate.allows(now: wakeTime.addingTimeInterval(1)), "Duplicate wake must be coalesced")
+    precondition(!gate.allows(now: wakeTime.addingTimeInterval(9.9)))
+    precondition(gate.allows(now: wakeTime.addingTimeInterval(10.1)), "A later wake must refresh again")
+    fixture.settingsOpen = false
+    let buildsBefore = fixture.panelBuildCount
+    fixture.refreshMenu()
+    precondition(fixture.panelBuildCount == buildsBefore, "Closed popover must not rebuild its view tree")
+    fixture.refreshMenu(forcePanel: true)
+    precondition(fixture.panelBuildCount == buildsBefore + 1, "Opening the popover must build it exactly once")
+    fixture.settingsOpen = true
+    fixture.refreshMenu()
+    precondition(fixture.panelBuildCount == buildsBefore + 2, "Settings must still build while on screen")
+    fixture.settingsOpen = false
     let suite="app.aidock.selftest."+UUID().uuidString
     let defaults=UserDefaults(suiteName:suite)!
     defaults.set(Data([0,1,2]),forKey:ProxyAppChoice.key)
@@ -799,6 +861,7 @@ if CommandLine.arguments.contains("--self-test") {
     defaults.removePersistentDomain(forName:suite)
     precondition(!ProxyAppChoice.valid(URL(fileURLWithPath:"/tmp")))
     print("PASS: bounded unresponsive CLI cleanup, missing CLI, stopped animations, same-position Back, invalid app selection")
+    print("PASS: duplicate wake coalescing, closed popover never rebuilt, on-screen settings still rebuilt")
     print("PASS: native symbols, contained settings controls, refresh running/success/failure states")
     for target in ProbeTarget.allCases {
         precondition(target.accepts(HTTPURLResponse(url: target.url, statusCode: target.expectedStatus, httpVersion: nil, headerFields: nil)!))

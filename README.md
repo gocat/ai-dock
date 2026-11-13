@@ -1,5 +1,7 @@
 # AI Dock
 
+[![CI](https://github.com/gocat/ai-dock/actions/workflows/ci.yml/badge.svg)](https://github.com/gocat/ai-dock/actions/workflows/ci.yml)
+
 简体中文 · [English](README.en.md)
 
 一个轻量的原生 macOS 菜单栏工具。当前聚焦 **Codex 周额度、ChatGPT / Google 连通性、快捷启动与低打扰提醒**。
@@ -76,7 +78,8 @@ curl -fsSL https://raw.githubusercontent.com/gocat/ai-dock/main/install.sh | bas
 
 ## 刷新与提醒
 
-- Codex 额度每 5 分钟读取一次，也可手动刷新。
+- Codex 额度每 5 分钟读取一次，也可手动刷新。合盖唤醒约 5 秒后自动补一次刷新，同一次唤醒的重复通知合并为一次。
+- 面板关闭时只更新菜单栏图标与悬停说明，打开面板才重建界面；这不改变检测频率和请求数量。
 - 默认慢速阈值 3000 ms，可选 1000 / 2000 / 3000 / 5000 ms。
 - 偏慢只显示状态，不弹窗。ChatGPT 连续 5 次失败才提醒；同轮故障一次；连续 3 次成功后重新启用，两次提醒至少间隔 30 分钟。
 - 上述提醒计数和冷却只在当前运行期间保存。Google 不增加弹窗提醒。
@@ -92,6 +95,8 @@ curl -fsSL https://raw.githubusercontent.com/gocat/ai-dock/main/install.sh | bas
 bash build.sh
 'build/AI Dock.app/Contents/MacOS/CodexCompanion' --self-test
 ```
+
+`build.sh` 编译后会清理签名元数据、做本地 ad-hoc 签名并直接运行自测。仓库包含 GitHub Actions 工作流（`macos-26`），每次推送和 PR 都会执行同样的构建与自测；本地 `--self-test` 输出应与 CI 一致。
 
 可选诊断（会发出真实请求，并在终端显示额度信息；分享输出前检查隐私）：
 
@@ -115,4 +120,4 @@ bash build.sh
 
 ## 1.0 候选版设置
 
-当前本地候选为 `1.0.0-rc.8`（build 29），尚未正式发布。设置页左侧明确标注语言，左上返回与首页设置按钮位置一致。可选择代理应用并记住选择，只负责打开应用；启动失败时提示重新选择。开机启动默认关闭，由用户主动开启。额度读取约 8 秒超时，网络资源超时 8 秒，等待兜底 9 秒；失败会结束刷新，不显示成功对勾。
+当前本地候选为 `1.0.0-rc.9`（build 30），尚未正式发布。设置页左侧明确标注语言，左上返回与首页设置按钮位置一致。可选择代理应用并记住选择，只负责打开应用；启动失败时提示重新选择。开机启动默认关闭，由用户主动开启。额度读取约 8 秒超时，网络资源超时 8 秒，等待兜底 9 秒；失败会结束刷新，不显示成功对勾。唤醒后补刷一次；真实合盖唤醒仍待实机验证。

@@ -1,5 +1,7 @@
 # AI Dock
 
+[![CI](https://github.com/gocat/ai-dock/actions/workflows/ci.yml/badge.svg)](https://github.com/gocat/ai-dock/actions/workflows/ci.yml)
+
 [简体中文](README.md) · English
 
 A native macOS menu bar utility for **Codex weekly quota, independent ChatGPT / Google connectivity checks, quick launchers, and quiet failure reminders**.
@@ -48,7 +50,7 @@ Open Settings and use the labeled Language menu on the left: **System**, **简�
 - Provides manual refresh, monochrome menu bar mode, an optional alert sound, and quit confirmation.
 - Keeps the overview and settings at the same compact size. Reopening the popover returns to the overview.
 
-Quota refreshes every 5 minutes; network checks run every 30 seconds. A slow result changes the status only. ChatGPT failures trigger at most one reminder per incident after 5 consecutive failures, with a 30-minute minimum interval between reminders; 3 successful checks rearm reminders. Google does not trigger pop-up alerts. Reminder state resets when the app restarts.
+Quota refreshes every 5 minutes; network checks run every 30 seconds. Wake from sleep triggers one extra refresh about 5 seconds later, with duplicate wake notifications merged into a single pass. A slow result changes the status only. ChatGPT failures trigger at most one reminder per incident after 5 consecutive failures, with a 30-minute minimum interval between reminders; 3 successful checks rearm reminders. Google does not trigger pop-up alerts. Reminder state resets when the app restarts.
 
 ## Build and run
 
@@ -60,7 +62,7 @@ bash build.sh
 open 'build/AI Dock.app'
 ```
 
-The build is locally ad-hoc signed, not Developer ID signed or notarized. No notarized installer is provided. Build scripts regenerate the original application icon; no account credentials or network downloads are needed to compile and run self-tests.
+The build is locally ad-hoc signed, not Developer ID signed or notarized. No notarized installer is provided. Build scripts regenerate the original application icon; no account credentials or network downloads are needed to compile and run self-tests. A GitHub Actions workflow (`macos-26`) runs the same build and self-test on every push and pull request; local `--self-test` output should match CI.
 
 Quota reads currently require the Codex CLI bundled at `/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex` and its existing authenticated account. The app invokes `app-server --stdio` and `account/rateLimits/read`; it does not read authentication files directly. The CLI account may differ from the account selected in a desktop UI. Only the reported Codex weekly window is supported. Missing or failed quota data is shown as unavailable.
 
@@ -79,7 +81,7 @@ Language, latency threshold, monochrome mode, sound, and a bookmark for the sele
 
 ## Performance and limitations
 
-The current schedule implies up to 240 HTTPS checks and 12 CLI launches per hour. A single idle sample showed about 57 MiB of memory and 0.0% CPU; this is not a battery-life measurement. See [performance research](PERFORMANCE.md) for proposed optimizations and the remaining validation plan.
+The current schedule implies up to 240 HTTPS checks and 12 CLI launches per hour. A single idle sample showed about 57 MiB of memory and 0.0% CPU; this is not a battery-life measurement. A closed popover now only updates the menu-bar item instead of rebuilding its view tree, which changes AppKit work but not the request count. See [performance research](PERFORMANCE.md) for remaining proposals and the validation plan.
 
 Real expired-login cases, extended sleep/wake testing, and broader OS/architecture coverage remain pending. Multi-account, other AI providers, WorkBuddy, Doubao Work, and Windows support are future research, not shipped features. See [product scope](PRODUCT.md) and [validation](VALIDATION.md).
 
@@ -89,4 +91,4 @@ Original project code: [MIT](LICENSE), Copyright (c) 2026 gocat. Third-party tra
 
 ## 1.0 candidate
 
-Local candidate `1.0.0-rc.8` (build 29) is not a final release. Settings keeps the same panel size and places Back at the overview Settings hit target. Quota reads have an approximately 8-second deadline with child cleanup; network resources time out after 8 seconds, with a 9-second wait fallback. Partial failures stop the spinner without showing a success checkmark.
+Local candidate `1.0.0-rc.9` (build 30) is not a final release. Settings keeps the same panel size and places Back at the overview Settings hit target. Quota reads have an approximately 8-second deadline with child cleanup; network resources time out after 8 seconds, with a 9-second wait fallback. Partial failures stop the spinner without showing a success checkmark. Wake from sleep triggers one coalesced refresh after a 5-second grace period; real lid-close/wake behaviour is still pending hardware validation.

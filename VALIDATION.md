@@ -102,3 +102,15 @@ Build 29 actual popup inspected: increased toolbar/card separation and reduced d
 ## Final daily source synchronization, November 12
 
 Bilingual showcases regenerated from current native views with synthetic quota/network values; no live account data included. Each README shows its own language image plus the icon guide. GIF now has 79 frames, smoothstep quota interpolation, blended connectivity colors/labels and pauses at important states; Chinese 64,815 bytes, English 75,092 bytes. Main UI/build remains accepted build 29. No final tag or notarized binary is created by this source sync.
+
+## Build 30: wake refresh and on-demand panel rendering
+
+`1.0.0-rc.9` / build 30. Two pending reliability items were implemented; no layout, detection target or signing change.
+
+- Wake: `NSWorkspace.didWakeNotification` now triggers one combined quota + ChatGPT + Google refresh about 5 seconds later, so a Wi-Fi/VPN link that is still reconnecting is not counted as a failure. `RefreshCoalescer` allows one refresh per 10-second window, so repeated notifications from a single wake collapse, and a manual refresh already in flight is never stacked on. The handler only schedules; it does not block the wake notification. The 30-second probe timer gained a 3-second tolerance.
+- Hidden popover: `refreshMenu` was split into `updateStatusItem`, `finishPendingManualRefresh` and the view-building part. The view tree is rebuilt only when the popover is on screen, the settings page is open, or the caller forces it (opening the panel). Previously every 30-second result and every appearance change rebuilt it while closed.
+- `build.sh`: clears Finder/file-provider metadata before ad-hoc signing and retries up to three times. In this workspace the metadata is re-added right after cleanup, which made `codesign` intermittently exit non-zero ("resource fork, Finder information, or similar detritus not allowed") and failed the build.
+
+Verified locally: `bash build.sh` compiles, regenerates the icon, ad-hoc signs, passes `codesign --verify --deep --strict` and runs all ten self-test groups, including the new assertions `duplicate wake coalescing, closed popover never rebuilt, on-screen settings still rebuilt`. `CFBundleShortVersionString` is `1.0.0-rc.9`, `CFBundleVersion` is `30`.
+
+Not verified: real lid-close/lid-open and long-sleep wake on hardware, wake during an in-flight manual refresh, multi-display restore, and the first GitHub Actions run (`macos-26`). No CPU or energy improvement is claimed for the rendering change; it removes redundant AppKit work, and the request count is unchanged.

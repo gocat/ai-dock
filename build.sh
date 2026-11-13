@@ -23,10 +23,17 @@ import plistlib,sys
 info={'CFBundleExecutable':'CodexCompanion','CFBundleIdentifier':sys.argv[2],
       'CFBundleName':'AI Dock','CFBundleDisplayName':'AI Dock','CFBundleIconFile':'Companion',
       'CFBundlePackageType':'APPL','LSApplicationCategoryType':'public.app-category.utilities',
-      'CFBundleVersion':'29','CFBundleShortVersionString':'1.0.0-rc.8','LSMinimumSystemVersion':'14.0',
+      'CFBundleVersion':'30','CFBundleShortVersionString':'1.0.0-rc.9','LSMinimumSystemVersion':'14.0',
       'LSUIElement':True,'NSHighResolutionCapable':True}
 with open(sys.argv[1],'wb') as f:plistlib.dump(info,f)
 PY
-codesign --force --sign - "$app"
+# Finder/file-provider metadata left on the bundle makes codesign refuse to sign.
+# Some synced or managed folders re-add it right after a clean-up, so retry a few
+# times and only surface the error if it keeps happening.
+for attempt in 1 2 3; do
+  xattr -cr "$app"
+  codesign --force --sign - "$app" 2>/dev/null && break
+  [[ "$attempt" == 3 ]] && codesign --force --sign - "$app"
+done
 codesign --verify --deep --strict "$app"
 "$app/Contents/MacOS/CodexCompanion" --self-test

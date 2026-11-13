@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build and self-test
+    # The launcher buttons use a macOS 26 control size, so the image needs the
+    # matching SDK. macos-26 is generally available and runs on Apple silicon.
+    runs-on: macos-26
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: |
+          sw_vers
+          xcode-select -p
+          swift --version
+          python3 -V
+
+      # build.sh regenerates the app icon, compiles, ad-hoc signs the bundle and
+      # finishes with the built-in --self-test run, so a failure here is a real one.
+      - name: Build and self-test
+        run: bash build.sh

@@ -1,3 +1,15 @@
+# November 13 update — build 30 / 1.0.0-rc.9
+
+- Wake from sleep refreshes quota and both connectivity checks once per wake burst, about 5 seconds after the notification so Wi-Fi/VPN can reconnect: a 10-second coalescing window merges duplicate notifications, and an in-flight manual refresh is never stacked on.
+- The popover view tree is rebuilt only while it is on screen. A closed panel now updates just the menu-bar icon, tooltip and accessibility label instead of rebuilding every 30 seconds.
+- The 30-second probe timer carries a 3-second tolerance so the system can coalesce wake-ups.
+- `build.sh` clears bundle metadata before ad-hoc signing and retries, so managed or synced folders no longer fail intermittently with codesign's "resource fork … not allowed" error.
+- GitHub Actions on `macos-26` now builds the app and runs the self-test on every push and pull request.
+
+Ten self-test groups pass locally, including the new wake-coalescing and closed-panel assertions. Real lid-close/wake testing and the first CI run are still pending. This is not a final tag; the build remains ad-hoc signed.
+
+---
+
 # November 12 final daily update
 
 Local build 29 / 1.0.0-rc.8 is the accepted end-of-day snapshot. The small in-app label is “AI Dock 1.0”; this source synchronization does not create a final release tag or signed installer.
