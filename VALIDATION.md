@@ -128,3 +128,11 @@ Verified: `bash build.sh` compiles, signs, verifies and passes 11 self-test grou
 Not verified on hardware: the perceived menu-bar appearance of orange in light and dark menu bars, and how "no alert, optional sound" feels during a real outage. No Apple-silicon-only or Intel coverage was added.
 
 Installer follow-up: `bash build.sh` now ad-hoc signs a copy of the bundle in `TMPDIR` and copies the finished bundle back, and `install.sh` verifies the staged copy instead of the source copy. This folder is inside a file-provider domain (iCloud-style) that re-adds Finder metadata asynchronously, so signing or verifying the repository copy intermittently failed with codesign's "resource fork … not allowed". The installed copy was verified after clearing metadata in the staging directory. Local install into `/Applications` replaced build 29 with build 31 and kept the previous bundle at `/Applications/.ai-dock-backup.WkK9ZW/AI Dock.app`; the app launched and has stayed running. Screen capture is unavailable in this session, so the live menu-bar colour was not visually confirmed.
+
+### Install receipt · 2026-11-13
+
+- Host: this development Mac, macOS 27.0.1 (26A434), Apple silicon, Swift 6.4.2, Python 3.14.10.
+- `AI_DOCK_INSTALL_DIR=/Applications bash install.sh --no-open` replaced build 29 (`1.0.0-rc.8`) with build 31 (`1.0.0-rc.10`). The previous bundle is kept at `/Applications/.ai-dock-backup.WkK9ZW/AI Dock.app`, and the `~/Applications/Codex Companion.app` symlink still resolves to the replacement. Preferences were not touched (same bundle identifier).
+- The installer ran its own build and eleven self-test groups, verified the staged bundle after clearing provider metadata, then swapped the bundle.
+- Launched with `open`: the process stayed up with a stable RSS, and no new crash report was written to `~/Library/Logs/DiagnosticReports`.
+- Still owner-verified only: how orange reads in a light and dark menu bar, and that a real outage produces no modal alert. Screen capture is unavailable in this session, so the live menu bar was not screenshotted. Manual steps are listed in README under 构建与验证 / "Check an installed build".

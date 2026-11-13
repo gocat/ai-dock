@@ -97,7 +97,7 @@ bash build.sh
 'build/AI Dock.app/Contents/MacOS/CodexCompanion' --self-test
 ```
 
-`build.sh` 编译后会清理签名元数据、做本地 ad-hoc 签名并直接运行自测。仓库包含 GitHub Actions 工作流（`macos-26`），每次推送和 PR 都会执行同样的构建与自测；本地 `--self-test` 输出应与 CI 一致。
+`build.sh` 编译后会先在临时目录的副本上清理签名元数据、做本地 ad-hoc 签名并运行自测，再把签好的应用拷回 `build/`（仓库位于同步目录时，直接在该目录签名会被异步回写的元数据打断）。仓库包含 GitHub Actions 工作流（`macos-26`），每次推送和 PR 都会执行同样的构建与自测；本地 `--self-test` 输出应与 CI 一致。
 
 可选诊断（会发出真实请求，并在终端显示额度信息；分享输出前检查隐私）：
 
@@ -108,6 +108,17 @@ bash build.sh
 构建使用本地 ad-hoc 签名，尚非面向公开分发的公证版本。读取额度依赖当前代码指定位置的 ChatGPT Codex CLI；代理应用可在设置中选择，不会自动安装。独立 `.app` 不代表这些运行依赖已消除。
 
 已验证：构建、自测、签名；原设置迁移和单实例；Finder 启动、退出确认、重新打开；设置、刷新进行与完成反馈；关键额度异常的界面分支。真实未登录/登录过期、完整深浅色矩阵、睡眠唤醒及长期网络波动仍待验证，详见[路线图](PRODUCT.md)。
+
+### 安装后自检
+
+```sh
+defaults read "/Applications/AI Dock.app/Contents/Info" CFBundleShortVersionString
+```
+
+1. **版本**：上面这条命令应输出你要安装的候选版本号（安装到 `~/Applications` 时替换路径）。
+2. **菜单栏配色**：外圈是本周剩余额度；中心点偏慢时应与面板色块同为橙色，正常为绿、未连通为红。
+3. **不弹窗**：关掉代理或断网后等待约 30 秒×5 次探测，或点一次刷新。预期只有图标与面板变化，**不出现模态弹窗**；若开启“异常提示音”，最多响一次。
+4. **回退**：退出应用后，把安装脚本打印的备份目录（`/Applications/.ai-dock-backup.*/AI Dock.app`）移回原位置即可。
 
 ## 开源与分发
 

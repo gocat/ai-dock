@@ -62,11 +62,22 @@ bash build.sh
 open 'build/AI Dock.app'
 ```
 
-The build is locally ad-hoc signed, not Developer ID signed or notarized. No notarized installer is provided. Build scripts regenerate the original application icon; no account credentials or network downloads are needed to compile and run self-tests. A GitHub Actions workflow (`macos-26`) runs the same build and self-test on every push and pull request; local `--self-test` output should match CI.
+The build is locally ad-hoc signed, not Developer ID signed or notarized. No notarized installer is provided. Build scripts regenerate the original application icon; no account credentials or network downloads are needed to compile and run self-tests. Signing happens on a copy in the temporary directory and the finished bundle is copied back, because this source folder sits in a synced location whose metadata is re-added asynchronously. A GitHub Actions workflow (`macos-26`) runs the same build and self-test on every push and pull request; local `--self-test` output should match CI.
 
 Quota reads currently require the Codex CLI bundled at `/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex` and its existing authenticated account. The app invokes `app-server --stdio` and `account/rateLimits/read`; it does not read authentication files directly. The CLI account may differ from the account selected in a desktop UI. Only the reported Codex weekly window is supported. Missing or failed quota data is shown as unavailable.
 
 Select a local proxy application in Settings. Clash Verge is the compatibility default when installed. Dependencies are not automatically installed.
+
+### Check an installed build
+
+```sh
+defaults read "/Applications/AI Dock.app/Contents/Info" CFBundleShortVersionString
+```
+
+1. **Version**: the command above should print the candidate you installed (adjust the path for a `~/Applications` install).
+2. **Menu-bar colours**: the outer arc is the weekly quota; a slow center dot should be the same orange as the panel swatch, with green for normal and red for unreachable.
+3. **No alert**: turn off the proxy or disconnect the network, then wait about five 30-second probes or press refresh once. Only the icon and panel should change; no modal alert appears. An enabled alert sound may fire at most once.
+4. **Rollback**: quit the app and move the backup directory printed by the installer (`/Applications/.ai-dock-backup.*/AI Dock.app`) back to the original location.
 
 ## Network and privacy
 
