@@ -1,3 +1,13 @@
+# November 13 update — build 31 / 1.0.0-rc.10
+
+- Slow connectivity now uses system orange in the menu bar, matching the panel swatch exactly. The icon-legend GIFs were regenerated with the same colour.
+- Connectivity failures no longer open a modal alert. The menu-bar lamp, tooltip and panel are the only signal. The optional alert sound (off by default) keeps its five-failure, one-per-incident, 30-minute gate.
+- Eleven self-test groups pass locally, including the new orange-lamp assertions.
+
+Both changes modify previously shipped behaviour and were requested directly by the owner; they are not roadmap items. Unchanged: quota reads, probe targets, refresh timing, panel layout and ad-hoc signing.
+
+---
+
 # November 13 update — build 30 / 1.0.0-rc.9
 
 - Wake from sleep refreshes quota and both connectivity checks once per wake burst, about 5 seconds after the notification so Wi-Fi/VPN can reconnect: a 10-second coalescing window merges duplicate notifications, and an in-flight manual refresh is never stacked on.

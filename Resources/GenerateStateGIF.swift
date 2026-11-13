@@ -28,7 +28,7 @@ func render(_ f:Frame,english:Bool)->CGImage {
   let base=NSBezierPath();base.appendArc(withCenter:NSPoint(x:x,y:128),radius:29,startAngle:225,endAngle:-45,clockwise:true);base.lineWidth=5;base.lineCapStyle = .round
   NSColor(calibratedWhite:0.30,alpha:1).setStroke();base.stroke()
   if remaining > 0 {let arc=NSBezierPath();arc.appendArc(withCenter:NSPoint(x:x,y:128),radius:29,startAngle:225,endAngle:225-CGFloat(remaining*270),clockwise:true);arc.lineWidth=5;arc.lineCapStyle = .round;NSColor.white.setStroke();arc.stroke()}
-  let colors=[NSColor(calibratedRed:0.12,green:0.85,blue:0.43,alpha:1),NSColor(calibratedRed:1,green:0.74,blue:0.05,alpha:1),NSColor(calibratedRed:1,green:0.23,blue:0.23,alpha:1)]
+  let colors=[NSColor(calibratedRed:0.12,green:0.85,blue:0.43,alpha:1),NSColor(calibratedRed:1,green:0.584,blue:0,alpha:1),NSColor(calibratedRed:1,green:0.23,blue:0.23,alpha:1)]
   let color = x < 360 ? colors[0] : colors[f.previous].blended(withFraction:f.blend,of:colors[f.state])!
   color.setFill()
   NSBezierPath(ovalIn:NSRect(x:x-7,y:121,width:14,height:14)).fill()

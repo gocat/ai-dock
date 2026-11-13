@@ -163,13 +163,13 @@ enum ProbeState: Equatable {
         switch self {
         case .unknown: return .aidockSecondary
         case .normal: return .systemGreen
-        case .slow: return .systemYellow
+        case .slow: return .systemOrange
         case .failed: return .systemRed
         }
     }
 }
 enum LampStyle: Equatable {
-    case hollow, white, neutral, green, yellow, red
+    case hollow, white, neutral, green, orange, red
     static func resolve(state: ProbeState, monochrome: Bool, persistentFailure: Bool) -> LampStyle {
         if monochrome {
             if state == .unknown { return .hollow }
@@ -178,7 +178,7 @@ enum LampStyle: Equatable {
         switch state {
         case .unknown: return .neutral
         case .normal: return .green
-        case .slow: return .yellow
+        case .slow: return .orange
         case .failed: return .red
         }
     }
@@ -187,7 +187,7 @@ enum LampStyle: Equatable {
         case .hollow, .white: return .white
         case .neutral: return .aidockSecondary
         case .green: return .systemGreen
-        case .yellow: return .systemYellow
+        case .orange: return .systemOrange
         case .red: return .systemRed
         }
     }
@@ -220,7 +220,7 @@ func statusIcon(remaining: Double?, state: ProbeState, monochrome: Bool = false,
         }
         return true
     }
-    image.isTemplate = false // Preserve the green/yellow/red lamp.
+    image.isTemplate = false // Preserve the green/orange/red lamp.
     return image
 }
 func probeLabel(_ name: String, checked: Bool, latency: Int?, threshold: Int) -> String {
@@ -628,7 +628,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopoverDeleg
             let swatch = NSView(frame: NSRect(x: x + 3, y: 19, width: 7, height: 14))
             swatch.wantsLayer = true
             swatch.layer?.cornerRadius = 3.5
-            swatch.layer?.backgroundColor = (current == .slow ? NSColor.systemOrange : current.color).cgColor
+            swatch.layer?.backgroundColor = current.color.cgColor
             view.addSubview(swatch)
             let value = target.3 ? L("检测中…") : !target.1 ? L("等待检测") : target.2.map { "\($0) ms · \($0 > threshold ? L("偏慢") : L("正常"))" } ?? L("— · 未连通")
             let result = label(value, x + 15, 9, 129, 12)
@@ -734,12 +734,13 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopoverDeleg
             self.latency=value;self.checked=true;self.probeBusy=false
             self.recentFailures.append(value == nil);self.recentFailures=Array(self.recentFailures.suffix(10))
             self.refreshMenu()
+            // Connectivity failures are reported by the menu-bar lamp and the panel
+            // only. There is no modal alert; the optional sound stays opt-in and is
+            // still gated so a flapping link cannot beep on every probe.
             if self.reminder.record(reachable: value != nil) {
                 if UserDefaults.standard.bool(forKey:"sound") { NSSound.beep() }
-                let alert=NSAlert();alert.messageText=L("ChatGPT HTTPS 探测异常");alert.informativeText=L("连续 5 次未能连通测试地址，请检查网络或代理应用。\n\n同一轮故障只提醒一次；此结果不代表 Codex 会话已断开。")
-                alert.addButton(withTitle:L("知道了"));alert.alertStyle = .warning;alert.window.level = .floating
-                alert.runModal()
-            };self.refreshMenu()
+            }
+            self.refreshMenu()
         } }
     }
     func checkGoogle() {
@@ -892,7 +893,7 @@ if CommandLine.arguments.contains("--self-test") {
     for _ in 0..<3 { precondition(!reminder.record(reachable: true, now: testTime)) }
     for _ in 0..<5 { precondition(!reminder.record(reachable: false, now: testTime.addingTimeInterval(100))) }
     precondition(reminder.record(reachable: false, now: testTime.addingTimeInterval(1800)))
-    print("PASS: reachable/slow never alerts; five failures, one reminder per incident, three-success recovery, 30-minute cooldown")
+    print("PASS: no modal failure alert; optional sound gated by five failures, one per incident, 30-minute cooldown")
     precondition(Quota.weeklyRemaining(["rateLimits": ["secondary": w]]) == 0.81)
     precondition(Quota.weeklyRemaining([:]) == nil)
     precondition(Quota.weeklyRemaining(["rateLimits": ["primary": ["usedPercent": 20.0, "windowDurationMins": 300]]]) == nil)
@@ -924,7 +925,13 @@ if CommandLine.arguments.contains("--self-test") {
     precondition(LampStyle.resolve(state: .failed, monochrome: true, persistentFailure: false) == .white)
     precondition(LampStyle.resolve(state: .failed, monochrome: true, persistentFailure: true) == .red)
     precondition(LampStyle.resolve(state: .failed, monochrome: false, persistentFailure: false) == .red)
+    // Menu-bar slow must match the panel swatch: both are system orange, not yellow.
+    precondition(LampStyle.resolve(state: .slow, monochrome: false, persistentFailure: false) == .orange)
+    precondition(ProbeState.state(checked: true, latency: 3001, threshold: 3000) == .slow)
+    precondition(ProbeState.state(checked: true, latency: 3001, threshold: 3000).color == NSColor.systemOrange)
+    precondition(ProbeState.state(checked: true, latency: 100, threshold: 3000).color == NSColor.systemGreen)
     print("PASS: optional monochrome lamp, hollow unknown, consecutive failure gate and recovery")
+    print("PASS: slow lamp and panel swatch share system orange; green/red unchanged")
     print("PASS: countdown and authoritative optional reset credits")
     print("PASS: weekly selection, unknown/nonweekly/other buckets, quota bounds, nonfinite data, all lamp states")
     print("PASS: quota parsing, missing data, clamping, backend denial; failure reminder policy")

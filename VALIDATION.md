@@ -114,3 +114,15 @@ Bilingual showcases regenerated from current native views with synthetic quota/n
 Verified locally: `bash build.sh` compiles, regenerates the icon, ad-hoc signs, passes `codesign --verify --deep --strict` and runs all ten self-test groups, including the new assertions `duplicate wake coalescing, closed popover never rebuilt, on-screen settings still rebuilt`. `CFBundleShortVersionString` is `1.0.0-rc.9`, `CFBundleVersion` is `30`.
 
 Not verified: real lid-close/lid-open and long-sleep wake on hardware, wake during an in-flight manual refresh, multi-display restore, and the first GitHub Actions run (`macos-26`). No CPU or energy improvement is claimed for the rendering change; it removes redundant AppKit work, and the request count is unchanged.
+
+## Build 31: orange slow state and no failure alert
+
+`1.0.0-rc.10` / build 31. Two behaviour changes requested by the owner; neither was on the roadmap list.
+
+- Slow connectivity uses `systemOrange` in the menu bar: `ProbeState.color` and `LampStyle` (case renamed `yellow` → `orange`) now share the value the panel swatch already used, and the dashboard swatch reads `current.color` instead of special-casing slow. Green (normal) and red (unreachable) are unchanged.
+- `docs/images/icon-states-zh.gif` and `-en.gif` were regenerated from `Resources/GenerateStateGIF.swift` with the amber value replaced by orange; both still have 79 frames (64,620 / 74,854 bytes). One frame was extracted and inspected to confirm the orange dot and the unchanged arc.
+- The modal alert in `checkProxy` was removed. Failures now only update the menu-bar lamp, tooltip, accessibility label and panel. The opt-in alert sound (default off) keeps its existing gate: 5 consecutive failures, once per incident, 30-minute minimum, rearm after 3 successes.
+
+Verified: `bash build.sh` compiles, signs, verifies and passes 11 self-test groups, including the new assertions that the slow lamp resolves to `.orange` and that the slow `ProbeState` colour equals `NSColor.systemOrange` while normal stays green.
+
+Not verified on hardware: the perceived menu-bar appearance of orange in light and dark menu bars, and how "no alert, optional sound" feels during a real outage. No Apple-silicon-only or Intel coverage was added.

@@ -34,7 +34,7 @@ Quota reads currently use the Codex CLI inside `/Applications/ChatGPT.app` and i
 
 ![Animated icon guide: outer arc shows quota; center dot shows OK, slow and unreachable](docs/images/icon-states-en.gif)
 
-The animated guide is about 75 KB, with eased transitions and readable holds. The outer arc shows 100%, 50%, and 0% remaining quota. Green, amber, and red center dots mean OK, slow, and unreachable. Zero quota does not mean a network failure; unknown quota uses a dashed arc. Examples show color mode, and connectivity does not establish VPN or Codex session health.
+The animated guide is about 75 KB, with eased transitions and readable holds. The outer arc shows 100%, 50%, and 0% remaining quota. Green, orange, and red center dots mean OK, slow, and unreachable; orange matches the panel swatch. Zero quota does not mean a network failure; unknown quota uses a dashed arc. Examples show color mode, and connectivity does not establish VPN or Codex session health.
 
 Supports light and dark appearances. This showcase renders the current native views with synthetic example data and the public build’s neutral symbols. Actual popover material varies with system appearance and background.
 
@@ -50,7 +50,7 @@ Open Settings and use the labeled Language menu on the left: **System**, **简�
 - Provides manual refresh, monochrome menu bar mode, an optional alert sound, and quit confirmation.
 - Keeps the overview and settings at the same compact size. Reopening the popover returns to the overview.
 
-Quota refreshes every 5 minutes; network checks run every 30 seconds. Wake from sleep triggers one extra refresh about 5 seconds later, with duplicate wake notifications merged into a single pass. A slow result changes the status only. ChatGPT failures trigger at most one reminder per incident after 5 consecutive failures, with a 30-minute minimum interval between reminders; 3 successful checks rearm reminders. Google does not trigger pop-up alerts. Reminder state resets when the app restarts.
+Quota refreshes every 5 minutes; network checks run every 30 seconds. Wake from sleep triggers one extra refresh about 5 seconds later, with duplicate wake notifications merged into a single pass. A slow result changes the status only. Connectivity failures never open a modal alert: the menu-bar lamp and the panel are the only signal. The optional alert sound, if enabled, still fires at most once per incident after 5 consecutive failures, with a 30-minute minimum interval; 3 successful checks rearm it. Google never triggers the sound. Reminder state resets when the app restarts.
 
 ## Build and run
 
